@@ -1,0 +1,37 @@
+<br/> <!-- отступ в одну строчку -->
+<div class="layout">
+    <form class="search">
+        <input type="text" placeholder="search" [formControl]="search">
+        <button type="submit" class="submit">
+            <span class="material-symbols-outlined">
+                search
+            </span>
+        </button>
+    </form>
+    <br>
+    <div *ngIf="towns.length" class="townList">
+        <a *ngFor="let town of filtredTowns.asObservable() | async" 
+            routerLink="/town/{{town.id}}" 
+            class="town"> <!-- async - pipe. раюотает с observable значениями. обновляет данные тега при изменении значения, интерпритируя его как статичный объект (Town в данном случае)-->
+            <div class="image">
+                <img [src]="getImage(town.property.c_longitude, town.property.c_latitude) | safe : 'resourceUrl'" alt="Preview">
+            </div>
+            <div class="content">
+                <h2>{{town.city_name}}</h2>
+            </div>
+            <div class="downloaded">
+                <span
+                    class="material-symbols-outlined" 
+                    [ngStyle]="{'color': town.downloaded ? '#6abcff' : 'rgba(105, 105, 105, 0.478)'}">
+                    download
+                </span>
+                <div class="tooltip">
+                    <span cdkMenuItem>{{town.downloaded ? 'Город скачан' : 'Город не скачан'}}</span>
+                </div>
+            </div>
+        </a>
+    </div>
+    <p style="text-align: center;" *ngIf="!noMoreCities">
+        <button (click)="onLoadMore()">Load more</button>
+    </p>
+</div>

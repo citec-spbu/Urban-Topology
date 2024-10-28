@@ -1,0 +1,65 @@
+.wrapper{
+    overflow: hidden;
+    position: relative;
+    height: calc(100vh - 64px);
+    /* padding-right: 64px; */
+}
+
+.wrapper.loading{
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.mapWrapper{
+    height: calc(100vh - 64px);
+    width: 100vw;
+}
+
+.graphWrapper, .roadsWrapper{
+    height: 100vh;
+    width: 100vw;
+}
+
+
+.menu:hover{
+    background: #cdcdcd;
+}
+
+.nav{
+    position: fixed;
+    top: 45vh;
+    left: 1em;
+    z-index: 999;
+}
+.nav button{
+    display: block;
+    height: 1em;
+    width: 1em;
+    border-radius: 50%;
+    background:  #6abcff7f;
+    border: 1px solid #008cff;
+    margin-bottom: 5px;
+    cursor: pointer;
+}
+.nav button.active{
+    background: #6abcff;
+}
+.nav button:disabled{
+    border-color: gray;
+    background: rgba(105, 105, 105, 0.478);
+}
+
+.overlay{
+    pointer-events: none;
+    position: fixed;
+    top:0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+    backdrop-filter: blur(5px);
+    cursor: auto;
+}

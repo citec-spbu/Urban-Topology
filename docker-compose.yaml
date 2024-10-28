@@ -1,0 +1,50 @@
+version: '3.7'
+
+services:
+  postgres:
+    image: postgis/postgis:12-3.3-alpine
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=fastapi_database
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "54321:5432"
+
+  webserver:
+    build:
+      context: api/
+    image: fastapi_service
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=fastapi_database
+    volumes:
+      - type: volume
+        source: logsvol
+        target: /app/logs
+      - type: bind
+        source: ./api/fastapi_service #delete in prod and add copy
+        target: /app/fastapi_service
+      - type: bind
+        source: ./api/cities_osm
+        target: /app/fastapi_service/data/cities_osm
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "8002:8002"
+
+  frontend:
+    build:
+      context: ui/
+    image: ts_service    
+    depends_on:
+      - webserver
+    ports:
+      - "4200:4200"
+
+volumes:     
+  pgdata:
+  logsvol:

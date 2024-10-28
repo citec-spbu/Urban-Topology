@@ -1,0 +1,41 @@
+<script src="../src/renderers/sigma.renderers.svg.js"></script>
+<div class="wrapper">
+    <div #sigmaContainer class="sigmaContainer"></div>
+    <div class="controls">
+        <div class="row">
+            <h2 class="infoTitle">{{name}} info:</h2>
+        </div>
+        <div class="row" *ngIf="metrics">
+            <h3>Metrics:</h3>
+            <p>Density: {{metrics.density.toFixed(5)}}</p>
+            <p>Diameter: {{metrics.diameter}}</p>
+            <p>Edge number: {{metrics.simpleSize}}</p>
+        </div>
+        <div class="row">
+            <input id="labels-threshold" [formControl]="labelsThreshold" type="range" min="0" max="15" step="1"/>
+            <label for="labels-threshold">Labels threshold</label>
+        </div>
+        <div class="row buttons">
+            <!-- <button class="icon" id="save-as-png" (click)="onSaveAs('png')">
+                <span class="material-symbols-outlined">
+                    save_alt
+                </span>
+            </button>
+            <label for="save-as-png">Save as PNG</label> -->
+
+            <button class="icon" id="save-as-svg" (click)="onSaveAs('svg')">
+                <span class="material-symbols-outlined">
+                    save_alt
+                </span>
+                <label for="save-as-svg">Save as SVG</label>
+            </button>
+
+            <button class="icon" id="save-as-csv" (click)="onSaveAs('csv')">
+                <span class="material-symbols-outlined">
+                   save_alt
+                </span>
+                <label for="save-as-csv">Save as CSV</label>
+            </button>
+        </div>
+    </div>
+</div>

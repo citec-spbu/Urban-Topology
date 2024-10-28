@@ -1,0 +1,8 @@
+<div 
+     #map
+     class="map"
+     leaflet
+     [leafletOptions]="options"
+     (leafletClick)="onClickHandler ? onClickHandler($event) : {}"
+     (leafletMapReady)="onMapReady($event)">
+</div>
