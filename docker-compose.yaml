@@ -43,7 +43,7 @@ services:
     depends_on:
       - webserver
     ports:
-      - "8902:8902"
+      - "4200:4200"
 
 volumes:     
   pgdata:
