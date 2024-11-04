@@ -1,4 +1,4 @@
-version: '3.7'
+# version: '3.7'
 
 services:
   postgres:
@@ -11,6 +11,8 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "54321:5432"
+    networks:
+      - network
 
   webserver:
     build:
@@ -34,7 +36,9 @@ services:
     depends_on:
       - postgres
     ports:
-      - "8002:8002"
+      - "8901:8901"
+    networks:
+      - network
 
   frontend:
     build:
@@ -44,7 +48,12 @@ services:
       - webserver
     ports:
       - "4200:4200"
+    networks:
+      - network
 
 volumes:     
   pgdata:
   logsvol:
+
+networks:
+  network:

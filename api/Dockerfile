@@ -9,12 +9,16 @@ COPY /requirements.txt /requirements.txt
 RUN apt-get update \
  && apt-get install wget unzip zip -y
 
- RUN apt-get install postgresql-client -y
+RUN apt-get install postgresql-client -y
+
+# RUN python -m pip install fiona
 
 RUN wget https://github.com/openstreetmap/osmosis/releases/download/0.48.3/osmosis-0.48.3.tgz \
 && mkdir osmosis && mv osmosis-0.48.3.tgz osmosis \
 && cd osmosis && tar xvfz osmosis-0.48.3.tgz \
 && rm osmosis-0.48.3.tgz && chmod a+x bin/osmosis
+
+RUN apt-get install -y gdal-bin libgdal-dev g++
 
 RUN pip install --upgrade pip && pip install -r /requirements.txt
 

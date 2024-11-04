@@ -18,7 +18,7 @@ logger = logs.init()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200"],
+    allow_origins=["http://localhost:4200", "http://158.160.17.229:4200", "http://0.0.0.0:4200"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
