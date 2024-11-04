@@ -18,7 +18,7 @@ logger = logs.init()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200"],
+    allow_origins=["http://localhost:8902"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +35,7 @@ async def shutdown():
 
 if __name__ == "__main__":
     metadata.create_all(engine)
-    run("main:app", host="0.0.0.0", port=getenv("PORT", 8002), reload=True)
+    run("main:app", host="0.0.0.0", port=getenv("PORT", 8901), reload=True)
 
 @app.get("/api/city/", response_model=CityBase)
 @logger.catch(exclude=HTTPException)

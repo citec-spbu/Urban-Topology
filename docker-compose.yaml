@@ -34,7 +34,7 @@ services:
     depends_on:
       - postgres
     ports:
-      - "8002:8002"
+      - "8901:8901"
 
   frontend:
     build:
@@ -43,7 +43,7 @@ services:
     depends_on:
       - webserver
     ports:
-      - "4200:4200"
+      - "8902:8902"
 
 volumes:     
   pgdata:
