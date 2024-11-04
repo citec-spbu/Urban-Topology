@@ -1,5 +1,10 @@
-name: Deploying wo Preimages
+name: Deploy production
 on: workflow_dispatch
+# on:
+#   pull_request:
+#     types: [ closed ]
+#     branches:
+#       - main
 env:
   DOCKER_COMPOSE_NAME: urban-topology
 
@@ -20,7 +25,7 @@ jobs:
           passphrase: ${{ secrets.PUNKER_PASSPHRASE }}
           command_timeout: 30m
           script: |
-            cd ${{ github.event.repository.name }}/main
+            cd ${{ github.event.repository.name }}
             git pull https://${{ secrets.PUNKER_GITHUB_USERNAME }}:${{ secrets.PUNKER_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git main
             
             rm .env
