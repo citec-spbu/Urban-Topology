@@ -1,0 +1,40 @@
+name: Deploy production
+on: workflow_dispatch
+# on:
+#   pull_request:
+#     types: [ closed ]
+#     branches:
+#       - main
+env:
+  DOCKER_COMPOSE_NAME: urban-topology
+
+  BACKEND_PORT: 8901
+  FRONTEND_PORT: 4200
+jobs:
+  DeployingVM:
+    name: Deploying to VM
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Deploying to VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.PUNKER_USERNAME }}
+          key: ${{ secrets.PUNKER_SSH_KEY_PRIVATE }}
+          passphrase: ${{ secrets.PUNKER_PASSPHRASE }}
+          command_timeout: 30m
+          script: |
+            cd ${{ github.event.repository.name }}
+            git pull https://${{ secrets.PUNKER_GITHUB_USERNAME }}:${{ secrets.PUNKER_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git main
+            
+            rm .env
+            echo BACKEND_CONTAINER_NAME=${{ env.DOCKER_COMPOSE_NAME }}-backend >> .env
+            echo BACKEND_PORT=${{ env.BACKEND_PORT }} >> .env
+            
+            echo FRONTEND_CONTAINER_NAME=${{ env.DOCKER_COMPOSE_NAME }}-frontend >> .env
+            echo FRONTEND_PORT=${{ env.FRONTEND_PORT }} >> .env
+            
+            sudo docker compose -p ${{ env.DOCKER_COMPOSE_NAME }} down            
+            sudo docker compose -p ${{ env.DOCKER_COMPOSE_NAME }} up --build -d
+            echo y | sudo docker image prune -a
