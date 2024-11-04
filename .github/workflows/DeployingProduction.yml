@@ -9,7 +9,7 @@ env:
   DOCKER_COMPOSE_NAME: urban-topology
 
   BACKEND_PORT: 8901
-  FRONTEND_PORT: 8902
+  FRONTEND_PORT: 4200
 jobs:
   DeployingVM:
     name: Deploying to VM
