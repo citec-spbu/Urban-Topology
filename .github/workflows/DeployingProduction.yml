@@ -1,10 +1,10 @@
 name: Deploy production
-on: workflow_dispatch
-# on:
-#   pull_request:
-#     types: [ closed ]
-#     branches:
-#       - main
+# on: workflow_dispatch
+on:
+  pull_request:
+    types: [ closed ]
+    branches:
+      - main
 env:
   DOCKER_COMPOSE_NAME: urban-topology
 
