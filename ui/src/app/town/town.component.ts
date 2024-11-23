@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Region, Town, _distBounds } from '../interfaces/town';
 import { FileService } from '../services/file.service';
 import { csv_result, TownService } from '../services/town.service';
-import { GraphDataSrvice, GraphData, INode, Edge } from '../services/graph-data.service';
+import { GraphDataService, GraphData, INode, Edge } from '../services/graph-data.service';
 import { saveText } from '../graph/saveAsPNG';  
 
 import * as L from 'leaflet'; //* - все
@@ -53,7 +53,7 @@ export class TownComponent implements OnInit, OnDestroy{
     private router: Router,
     private fileService: FileService,
     private cdRef: ChangeDetectorRef,
-    private graphDataService: GraphDataSrvice
+    private graphDataService: GraphDataService
   ) { 
     this.section = sections.map;
     this.route.paramMap.subscribe(params=>{
