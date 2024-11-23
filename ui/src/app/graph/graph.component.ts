@@ -11,7 +11,7 @@ import forceAtlas2 from 'graphology-layout-forceatlas2';
 import circular from "graphology-layout/circular";
 import {AbstractGraph} from 'graphology-types';
 import saveAs from './saveAsPNG';
-import { GraphData, GraphDataSrvice } from '../services/graph-data.service';
+import { GraphData, GraphDataService } from '../services/graph-data.service';
 import { debounceTime } from 'rxjs';
 
 var graphml = require('graphology-graphml/browser');

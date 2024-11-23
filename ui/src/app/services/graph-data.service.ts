@@ -27,7 +27,7 @@ export interface GraphData{
 }
 
 @Injectable({providedIn: 'root'})
-export class GraphDataSrvice {
+export class GraphDataService {
     // graph: Graph = new Graph();
     constructor() {}
 
