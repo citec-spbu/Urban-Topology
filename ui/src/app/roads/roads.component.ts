@@ -25,18 +25,39 @@ export class RoadsComponent implements OnInit {
   @Input() loading: boolean = false;
   printControl: any;
   // gds?: L.GeoJSON;
+  private _center: L.LatLngTuple = [46.879966, -121.726909];
+  @Input() set center(val: L.LatLngTuple) {
+    this._center = val;
+    this.options = {
+      layers: [
+        new L.TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
+        } as L.TileLayerOptions),
+        this.roads,
+        this.crossroads
+      ] as L.Layer[],
+      zoom: 10,
+      center: val
+    };
+  }
+  get center(): L.LatLngTuple { return this._center; }
 
   roads = new L.FeatureGroup([]);
+  crossroads = new L.FeatureGroup([]);
 
   @Output() downloadRgraph = new EventEmitter();
 
   map?: L.Map;
   options: L.MapOptions = {
     layers: [
-      this.roads
+      new L.TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
+      } as L.TileLayerOptions),
+      this.roads,
+      this.crossroads
     ] as L.Layer[],
-    center: [55.754527, 37.619509],
-    zoom: 10,
+    center: this.center,//[55.754527, 37.619509],
+    zoom: 9,
   };
   constructor(
   ) { }
@@ -46,6 +67,8 @@ export class RoadsComponent implements OnInit {
 
   onMapReady(map: L.Map){
     this.map = map;
+    map.setZoom(10);
+    map.setMaxBounds(map.getBounds());
     this.setTools(map);
     if(this.graphData) this.updateRoads(this.graphData);
   }
@@ -53,27 +76,83 @@ export class RoadsComponent implements OnInit {
   updateRoads(gd: GraphData){
     if(!this.map) return;
     this.roads.clearLayers();
+    this.crossroads.clearLayers(); // Очистка слоя перекрестков
 
-    let roads: { [key: string]: L.Polyline} = {};
+    let roads: { [key: string]: L.Polyline } = {};
+    let nodeWayConnections: { [key: string]: Set<string> } = {}; // Узлы и уникальные дороги
 
+    // Отрисовка дорог и учет уникальных `way_id` для каждого узла
     Object.values(gd.edges).forEach(edge => {
-      if(edge.way_id)
-      if(!roads[edge.way_id]) {
-        if (edge.name) {
-          var road_color = iwanthue(1, {seed: edge.name})[0]
-        } else {
-          var road_color = '#ebebeb'
-        }
-        roads[edge.way_id] = L.polyline([
-          [gd.nodes[edge.from].lat, gd.nodes[edge.from].lon],
-          [gd.nodes[edge.to].lat, gd.nodes[edge.to].lon], 
-        ], {color: road_color, weight: 4}
-        ).bindTooltip(edge.name || 'null').addTo(this.roads);
-      } else {
-        roads[edge.way_id].addLatLng([gd.nodes[edge.from].lat, gd.nodes[edge.from].lon]);
-        roads[edge.way_id].addLatLng([gd.nodes[edge.to].lat, gd.nodes[edge.to].lon]);
+      // Проверка существования way_id
+      if (edge.way_id) {
+        // Учет уникальных дорог для каждого узла
+        if (!nodeWayConnections[edge.from]) nodeWayConnections[edge.from] = new Set();
+        if (!nodeWayConnections[edge.to]) nodeWayConnections[edge.to] = new Set();
+        nodeWayConnections[edge.from].add(edge.way_id); // Добавляем только если way_id существует
+        nodeWayConnections[edge.to].add(edge.way_id);
       }
-    })
+
+      // Отрисовка дорог
+      if (edge.way_id) {
+        if (!roads[edge.way_id]) {
+          const road_color = edge.name
+            ? iwanthue(1, { seed: edge.name })[0]
+            : '#ebebeb';
+          roads[edge.way_id] = L.polyline(
+            [
+              [gd.nodes[edge.from].lat, gd.nodes[edge.from].lon],
+              [gd.nodes[edge.to].lat, gd.nodes[edge.to].lon]
+            ],
+            { color: road_color, weight: 4 }
+          )
+            .bindTooltip(`<b>Идентификатор</b>: ${edge.way_id} <br> 
+                          <b>Название</b>: ${edge.name || 'Неизвестная дорога'}`)
+            .addTo(this.roads);
+        } else {
+          roads[edge.way_id].addLatLng([gd.nodes[edge.from].lat, gd.nodes[edge.from].lon]);
+          roads[edge.way_id].addLatLng([gd.nodes[edge.to].lat, gd.nodes[edge.to].lon]);
+        }
+      }
+    });
+
+    // Отрисовка перекрестков: Узлы с более чем одной уникальной дорогой
+    Object.entries(nodeWayConnections).forEach(([nodeId, wayIds]) => {
+      if (wayIds.size > 1) { // Если узел связан с двумя и более дорогами
+        const node = gd.nodes[nodeId];
+        if (node) {
+          // Собираем названия дорог и их идентификаторы
+          const roadNames: string[] = [];
+          const roadIds: string[] = [];
+
+          wayIds.forEach((wayId) => {
+            const edge = Object.values(gd.edges).find(e => e.way_id === wayId);
+            if (edge) {
+              roadIds.push(wayId); // Добавляем идентификатор
+              roadNames.push(edge.name || 'Неизвестная дорога'); // Добавляем имя дороги
+            }
+          });
+
+          // Формируем popup с информацией о перекрестке
+          const popupContent = `
+        <b>Перекресток:</b><br>
+        Идентификатор: ${nodeId}<br>
+        Уникальных дорог: ${wayIds.size}<br>
+        <b>Дороги:</b><br>
+        ${roadNames.map((name, index) => `${name} (ID: ${roadIds[index]})`).join('<br>')}
+      `;
+
+          // Добавляем перекресток на карту
+          L.circleMarker([node.lat, node.lon], {
+            radius: 3,
+            color: '#ff0000', // Красный цвет для перекрестков
+            fillColor: '#ff0000',
+            fillOpacity: 0.8
+          })
+            .bindPopup(popupContent)
+            .addTo(this.crossroads);
+        }
+      }
+    });
 
     this.map.fitBounds(this.roads.getBounds());
   }
