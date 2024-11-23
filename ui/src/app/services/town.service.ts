@@ -15,6 +15,11 @@ export interface csv_result{
   ways_properties_csv: string,
 }
 
+export interface osmnx_csv_result{
+  nodes_csv: string,
+  edges_csv: string
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -65,6 +70,14 @@ export class TownService {
   getGraphFromId(id: number, regionId: number){
     const body = [regionId];
     return this.http.post<csv_result>(`${host}/city/graph/region/?city_id=${id}`, body, this.getHttpOptions());
+  }
+
+  getOSMNXGraphFromBbox(id: number, nodes: [number, number][]){
+    return this.http.post<osmnx_csv_result>(`${host}/city/osmnx_graph/bbox/${id}`, [nodes], this.getHttpOptions());
+  }
+  getOSMNXGraphFromId(id: number, regionId: number){
+    const body = [regionId];
+    return this.http.post<osmnx_csv_result>(`${host}/city/osmnx_graph/region/?city_id=${id}`, body, this.getHttpOptions());
   }
 }
 

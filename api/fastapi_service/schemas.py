@@ -35,6 +35,10 @@ class GraphBase(BaseModel):
     reversed_nodes_csv : str
     # reversed_matrix_csv : str
 
+class OSMNXGraphBase(BaseModel):
+    nodes_csv : str
+    edges_csv : str
+
 
 
     

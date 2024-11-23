@@ -13,7 +13,8 @@ import { SafePipe } from './pipes/safe.pipe';
 import { LeafletModule } from '@asymmetrik/ngx-leaflet';
 import { MapComponent } from './map/map.component';
 import { GraphComponent } from './graph/graph.component';
-import { RoadsComponent } from './roads/roads.component'
+import { RoadsComponent } from './roads/roads.component';
+import { OsmnxComponent } from './osmnx/osmnx.component'
 
 @NgModule({
   declarations: [
@@ -24,7 +25,8 @@ import { RoadsComponent } from './roads/roads.component'
     SafePipe,
     MapComponent,
     GraphComponent,
-    RoadsComponent
+    RoadsComponent,
+    OsmnxComponent
   ],
   imports: [
     BrowserModule,

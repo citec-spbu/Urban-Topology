@@ -1,11 +1,12 @@
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from uvicorn import run
 from os import getenv
-from schemas import CityBase, RegionBase, GraphBase
+from schemas import CityBase, RegionBase, GraphBase, OSMNXGraphBase
 from database import database, engine, metadata
 
+import osmnx as ox
 import pandas as pd
 import geopandas as gpd
 import services
@@ -114,6 +115,55 @@ async def city_graph(
     logger.info(f"{request} {status_code} {detail}")
     return services.graph_to_scheme(points, edges, pprop, wprop)
 
+@app.post('/api/city/osmnx_graph/region/', response_model=OSMNXGraphBase)
+@logger.catch(exclude=HTTPException)
+async def city_graph(
+    city_id: int,
+    request: Request,
+):
+    status_code = 200
+    detail = "OK"
+
+    place = get_city_name_by_id(city_id, cities_info)
+    coordinates = get_polygon_by_city_name(regions_df, place)
+    graph = ox.graph_from_polygon(coordinates, network_type='drive', simplify=True)
+    
+    nodes, edges = ox.graph_to_gdfs(graph)
+
+    edges_geojson = edges.to_json()
+    nodes_geojson = nodes.to_json()
+
+    logger.info(f"{request.url.path} {status_code} {detail}")
+    return {"nodes_csv": nodes_geojson, "edges_csv": edges_geojson}
+
+def get_polygon_by_city_name(geo_df, city_name):
+    """
+    Получает полигон из GeoDataFrame по имени города.
+
+    :param geo_df: GeoDataFrame с геометрией
+    :param city_name: Имя города (строка)
+    :return: Полигон (shapely.geometry.Polygon) или None, если город не найден
+    """
+    # Фильтрация по имени города
+    filtered = geo_df[(geo_df['admin_level'] == 6.0)&(geo_df['boundary']=='administrative') & ((geo_df['name'] == city_name) | (geo_df['local_name'] == city_name))]
+
+    if filtered.empty:
+        return None  # Город не найден
+    # Извлечение геометрии
+    return filtered.iloc[0].geometry
+
+def get_city_name_by_id(city_id: int, cities_info: pd.DataFrame) -> str:
+    """
+    Возвращает имя города по его ID.
+    :param city_id: Идентификатор города (значение из 'Unnamed: 0').
+    :param cities_info: DataFrame с информацией о городах.
+    :return: Название города или сообщение, если ID не найден.
+    """
+    try:
+        city_name = cities_info.loc[cities_info['Unnamed: 0'] == (city_id-1), 'Город'].values[0]
+        return city_name
+    except IndexError:
+        return f"Город с ID {city_id} не найден."
 
 @app.post('/api/city/graph/bbox/{city_id}/', response_model=GraphBase)
 @logger.catch(exclude=HTTPException)

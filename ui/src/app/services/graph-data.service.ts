@@ -26,6 +26,11 @@ export interface GraphData{
   }
 }
 
+export interface OSMNXGraphData {
+    nodes: string
+    edges: string
+}
+
 @Injectable({providedIn: 'root'})
 export class GraphDataService {
     // graph: Graph = new Graph();

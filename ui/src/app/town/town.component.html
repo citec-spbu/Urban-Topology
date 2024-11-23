@@ -18,11 +18,16 @@
         <a name="roads"></a>
         <app-roads *ngIf="RgraphData" [graphData]="RgraphData" [loading]="loading" (downloadRgraph)="handleDownload('r')"></app-roads>
     </div>
+    <div class="osmnxWrapper">
+        <a name="osmnx"></a>
+        <app-osmnx *ngIf="OSMNXGraphData" [OSMNXGraphData]="OSMNXGraphData" [loading]="loading"></app-osmnx>
+    </div>
 
     <div class="nav">
         <button title="Map" [ngClass]="{'active': section == 'map'}" (click)="section = 'map'"></button>
         <button title="Graph" [ngClass]="{'active': section == 'graph'}" (click)="section = 'graph'" [disabled]="!LgraphData"></button>
         <button title="Roads" [ngClass]="{'active': section == 'roads'}" (click)="section = 'roads'" [disabled]="!RgraphData"></button>
+        <button title="OSMNX" [ngClass]="{'active': section == 'osmnx'}" (click)="section = 'osmnx'" [disabled]="!OSMNXGraphData"></button>
     </div>
 </div>
 

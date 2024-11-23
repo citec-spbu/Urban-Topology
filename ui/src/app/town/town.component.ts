@@ -2,8 +2,8 @@ import {ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild} 
 import { ActivatedRoute, Router } from '@angular/router';
 import { Region, Town, _distBounds } from '../interfaces/town';
 import { FileService } from '../services/file.service';
-import { csv_result, TownService } from '../services/town.service';
-import { GraphDataService, GraphData, INode, Edge } from '../services/graph-data.service';
+import { csv_result, TownService, osmnx_csv_result } from '../services/town.service';
+import { GraphDataService, GraphData, INode, Edge, OSMNXGraphData } from '../services/graph-data.service';
 import { saveText } from '../graph/saveAsPNG';  
 
 import * as L from 'leaflet'; //* - все
@@ -11,7 +11,8 @@ import * as L from 'leaflet'; //* - все
 enum sections{
   map = 'map',
   graph = 'graph',
-  roads = 'roads'
+  roads = 'roads',
+  osmnx = 'osmnx'
 }
 
 
@@ -31,6 +32,7 @@ export class TownComponent implements OnInit, OnDestroy{
   town?: Town;
   RgraphData?: GraphData;
   LgraphData?: GraphData;
+  OSMNXGraphData?: OSMNXGraphData;
 
   // currentCsv?: csv_result;
 
@@ -106,11 +108,13 @@ export class TownComponent implements OnInit, OnDestroy{
     delete this.rEdges;
     delete this.LgraphData;
     delete this.RgraphData;
+    delete this.OSMNXGraphData;
 
     if(ev.regionId){
       this.loading = true;
       this.cdRef.detectChanges();
       this.townService.getGraphFromId(this.id, ev.regionId).subscribe(this.graphSubscriber)
+      this.townService.getOSMNXGraphFromId(this.id, ev.regionId).subscribe(this.osmnxGraphSubscriber)
       return;
     }
     if(ev.polygon){
@@ -119,8 +123,17 @@ export class TownComponent implements OnInit, OnDestroy{
       this.loading = true;
       this.cdRef.detectChanges();
       this.townService.getGraphFromBbox(this.id, body).subscribe(this.graphSubscriber);
+      this.townService.getOSMNXGraphFromBbox(this.id, body).subscribe(this.osmnxGraphSubscriber)
       return;
     }
+  }
+
+  osmnxGraphSubscriber = (res: osmnx_csv_result) => {
+    this.OSMNXGraphData = {nodes: res.nodes_csv, edges: res.edges_csv}
+
+    this.loading = false;
+    this.section = sections.osmnx;
+    this.cdRef.detectChanges();
   }
   
   graphSubscriber = (res: csv_result) => {
