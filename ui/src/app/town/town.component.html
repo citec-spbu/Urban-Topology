@@ -16,7 +16,7 @@
     </div>
     <div class="roadsWrapper">
         <a name="roads"></a>
-        <app-roads *ngIf="RgraphData" [graphData]="RgraphData" [loading]="loading" (downloadRgraph)="handleDownload('r')"></app-roads>
+        <app-roads *ngIf="RgraphData" [graphData]="RgraphData" [loading]="loading" [center]="getCenter()" (downloadRgraph)="handleDownload('r')"></app-roads>
     </div>
 
     <div class="nav">
