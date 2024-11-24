@@ -7,6 +7,15 @@ import { saveText } from '../graph/saveAsPNG';
 import * as L from 'leaflet';
 import 'leaflet-easyprint';
 
+function getColorBasedOnMetric(value: number): string {
+  value = Math.min(1,value * 4);
+  const red = Math.floor(255 * (1 - value));
+  const green = Math.floor(255 * value);
+  const blue = 0; // Держим синий компонент на нуле для градации от красного к зеленому
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+
 
 @Component({
   selector: 'app-roads',
@@ -135,6 +144,7 @@ export class RoadsComponent implements OnInit {
           // Формируем popup с информацией о перекрестке
           const popupContent = `
         <b>Перекресток:</b><br>
+        Значение метрики: ${node.metric_value}<br>
         Идентификатор: ${nodeId}<br>
         Уникальных дорог: ${wayIds.size}<br>
         <b>Дороги:</b><br>
@@ -144,8 +154,8 @@ export class RoadsComponent implements OnInit {
           // Добавляем перекресток на карту
           L.circleMarker([node.lat, node.lon], {
             radius: 3,
-            color: '#ff0000', // Красный цвет для перекрестков
-            fillColor: '#ff0000',
+            color: getColorBasedOnMetric(Number(node.metric_value)), // Красный цвет для перекрестков
+            fillColor: getColorBasedOnMetric(Number(node.metric_value)),
             fillOpacity: 0.8
           })
             .bindPopup(popupContent)

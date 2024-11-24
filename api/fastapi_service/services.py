@@ -21,6 +21,7 @@ import io
 import pandas as pd
 import networkx as nx
 import time
+import networkx as nx
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -52,30 +53,31 @@ def list_to_csv_str(data, columns : List['str']):
 
 
 def reversed_graph_to_csv_str(edges_df : DataFrame):
-    redges_df, rnodes_df = get_reversed_graph(edges_df, "id_way")
+    redges_df, rnodes_df, reversed_metrics_df = get_reversed_graph(edges_df, "id_way")
 
     redges = io.StringIO()
     rnodes = io.StringIO()
-    # rmatrix = io.StringIO()
+    rmetrics = io.StringIO()
 
     redges_df.to_csv(redges, index=False)
     rnodes_df.to_csv(rnodes, index=False)
-    # rmatrix_df.to_csv(rmatrix, index=False)
-    return redges.getvalue(), rnodes.getvalue()
+    reversed_metrics_df.to_csv(rmetrics, index=False)
+    return redges.getvalue(), rnodes.getvalue(), rmetrics.getvalue()
 
 
-def graph_to_scheme(points, edges, pprop, wprop) -> GraphBase:
+def graph_to_scheme(points, edges, pprop, wprop, metrics) -> GraphBase:
     edges_str, edges_df = list_to_csv_str(edges, ['id', 'id_way', 'source', 'target', 'name'])
     points_str, _ = list_to_csv_str(points, ['id', 'longitude', 'latitude'])
     pprop_str, _ = list_to_csv_str(pprop, ['id', 'property', 'value'])
     wprop_str, _ = list_to_csv_str(wprop, ['id', 'property', 'value'])
+    metrics_str, _ = list_to_csv_str(metrics, ['id', 'value'])
 
-    r_edges_str, r_nodes_str = reversed_graph_to_csv_str(edges_df)
+    r_edges_str, r_nodes_str, r_mertircs_str = reversed_graph_to_csv_str(edges_df)
 
     return GraphBase(edges_csv=edges_str, points_csv=points_str, 
                      ways_properties_csv=wprop_str, points_properties_csv=pprop_str,
-                     reversed_edges_csv=r_edges_str, reversed_nodes_csv=r_nodes_str)
-                    #  reversed_matrix_csv=r_matrix_str)
+                     reversed_edges_csv=r_edges_str, reversed_nodes_csv=r_nodes_str,
+                     metrics_csv=metrics_str, reversed_metrics_csv=r_mertircs_str)
 
 
 async def property_to_scheme(property : CityProperty) -> PropertyBase:
@@ -422,7 +424,7 @@ def polygons_from_region(regions_ids : List[int], regions : GeoDataFrame):
 async def graph_from_ids(city_id : int, regions_ids : List[int], regions : GeoDataFrame):
     polygon = polygons_from_region(regions_ids=regions_ids, regions=regions)
     if polygon == None:
-        return None, None, None, None
+        return None, None, None, None, None
     return await graph_from_poly(city_id=city_id, polygon=polygon)
 
 
@@ -548,7 +550,9 @@ async def graph_from_poly(city_id, polygon):
 
     conn.close()
 
-    return points, edges, points_prop, ways_prop    
+    metrics = calc_metrics(points, edges)
+
+    return points, edges, points_prop, ways_prop, metrics
 
 
 def build_in_query(query_field : str, values : Iterable[Union[int, str]]):
@@ -684,5 +688,47 @@ def get_reversed_graph(graph: DataFrame, way_column: str):
     df_connections = df_connections.join(nodes_df[["index", "street_name"]].set_index("street_name"), on="street_name1", how="inner").rename(columns={"index": "src_index"})
     df_connections = df_connections.join(nodes_df[["index", "street_name"]].set_index("street_name"), on="street_name2", how="inner").rename(columns={"index": "dest_index"})
     edges_df = df_connections[["src_index", "dest_index"]].drop_duplicates().reset_index(drop=True)
-    return edges_df, nodes_df
 
+    nodes_list = nodes_df["id_way"].values.tolist()
+    edges_list = edges_df[["src_index", "dest_index"]].values.tolist()
+
+    reversed_metrics = calc_rev_metrics([i for i in range(len(edges_list))], edges_list)
+    reversed_metrics_df = pd.DataFrame(reversed_metrics, columns=["id_way", "value"]).reset_index(drop=True)
+
+    return edges_df, nodes_df, reversed_metrics_df
+
+def calc_metrics(points, edges):
+    points_list = [point[0] for point in points]
+    edges_list = [(edge[2], edge[3]) for edge in edges]
+
+    print("CHECK")
+    print("points", points[:10])
+    print("edges", edges[:10])
+
+    G = nx.Graph()
+    G.add_nodes_from(points_list)
+    G.add_edges_from(edges_list)
+
+
+    betweenness_dict = nx.betweenness_centrality(G)
+    betweenness_list = [[k, v] for k, v in betweenness_dict.items()]
+    print("betweenness_list", betweenness_list[:10])
+
+    return betweenness_list
+
+def calc_rev_metrics(points_list, edges_list):
+
+    print("CHECK REV")
+    print("points rev", points_list[:10])
+    print("edges rev", edges_list[:10])
+
+    G = nx.Graph()
+    G.add_nodes_from(points_list)
+    G.add_edges_from(edges_list)
+
+
+    betweenness_dict = nx.betweenness_centrality(G)
+    betweenness_list = [[k, v] for k, v in betweenness_dict.items()]
+    print("betweenness_list rev", betweenness_list[:10])
+
+    return betweenness_list

@@ -14,7 +14,8 @@ export interface INode{
     lat: number,
     lon: number,
     way_id: number,
-    name?: string
+    name?: string,
+    metric_value?: string
 }
 
 export interface GraphData{
@@ -25,6 +26,11 @@ export interface GraphData{
     [key: string]: Edge
   }
 }
+
+export interface Metric{
+    id: string
+    value: string
+  }
 
 @Injectable({providedIn: 'root'})
 export class GraphDataService {
