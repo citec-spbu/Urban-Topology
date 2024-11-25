@@ -6,7 +6,7 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 COPY /requirements.txt /requirements.txt
 
-RUN apt-get update \
+RUN apt-get -y update \
  && apt-get install wget unzip zip -y
 
 RUN apt-get install postgresql-client -y

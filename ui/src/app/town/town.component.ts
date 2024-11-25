@@ -3,7 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Region, Town, _distBounds } from '../interfaces/town';
 import { FileService } from '../services/file.service';
 import { csv_result, TownService } from '../services/town.service';
-import { GraphDataService, GraphData, INode, Edge } from '../services/graph-data.service';
+import { GraphDataService, GraphData, INode, Edge, Metric } from '../services/graph-data.service';
 import { saveText } from '../graph/saveAsPNG';  
 
 import * as L from 'leaflet'; //* - все
@@ -26,6 +26,8 @@ export class TownComponent implements OnInit, OnDestroy{
   pointPropsCsv?: string;
   rNodes?: string;
   rEdges?: string;
+  metrics?: string;
+  rMetrics?: string;
 
   id?: number;
   town?: Town;
@@ -104,6 +106,8 @@ export class TownComponent implements OnInit, OnDestroy{
     delete this.pointPropsCsv;
     delete this.rNodes;
     delete this.rEdges;
+    delete this.rMetrics;
+    delete this.metrics;
     delete this.LgraphData;
     delete this.RgraphData;
 
@@ -128,9 +132,11 @@ export class TownComponent implements OnInit, OnDestroy{
     this.wayPropsCsv = res.ways_properties_csv;
     this.rNodes = res.reversed_nodes_csv;
     this.rEdges = res.reversed_edges_csv;
+    this.rMetrics = res.reversed_metrics_csv;
+    this.metrics = res.metrics_csv;
 
-    this.getRgraph(res.points_csv, res.edges_csv);
-    this.getLgraph(res.reversed_nodes_csv, res.reversed_edges_csv);
+    this.getRgraph(res.points_csv, res.edges_csv, res.metrics_csv);
+    this.getLgraph(res.reversed_nodes_csv, res.reversed_edges_csv, res.reversed_metrics_csv);
     this.loading = false;
     this.section = sections.graph;
     this.cdRef.detectChanges();
@@ -154,21 +160,44 @@ export class TownComponent implements OnInit, OnDestroy{
         saveText('points_properties.csv', this.pointPropsCsv, 'text/csv');
       if(this.wayPropsCsv) 
         saveText('ways_properties.csv', this.wayPropsCsv, 'text/csv');
+      if(this.rMetrics) 
+        saveText('reversed_metrics_csv.csv', this.rMetrics, 'text/csv');
+      if(this.metrics) 
+        saveText('metrics_csv.csv', this.metrics, 'text/csv');
     }
   }
 
-  getRgraph(nodes_str: string, edges_str: string){
+  getRgraph(nodes_str: string, edges_str: string, metrics_str: string){
     const nodes: { [key: string]: INode } = {};
     const edges: { [key: string]: Edge } = {};
+
+    const metrics: { [key: string]: Metric } = {};
+
+    const metric_lines = metrics_str.split('\n')
+    metric_lines.slice(1).forEach((line, index) => {
+      const [id, value] = line.split(',');
+      if(id && value){
+        metrics[Number(id)] = {
+          id: id,
+          value: value
+        }
+      }
+    })
+
+    const metrics_values = Object.values(metrics).map(metric => ({id: metric.id, value: metric.value}));
 
     const node_lines = nodes_str.split('\n')
     node_lines.slice(1).forEach((line, index) => {
       const [id, longitude, latitude] = line.split(',');
+
+      const m_val = metrics_values.find(m => m.id == id)?.value;
+      
       if(id){
         nodes[Number(id)] = {
           lat: Number(latitude),
           lon: Number(longitude),
-          way_id: Number(id)
+          way_id: Number(id),
+          metric_value: m_val
         }
       }
     })
@@ -194,11 +223,23 @@ export class TownComponent implements OnInit, OnDestroy{
     // console.log(this.RgraphData)
   }
   
-  getLgraph(nodes_str: string, edges_str: string){
+  getLgraph(nodes_str: string, edges_str: string, reversed_metrics_str : string){
     const nodes: { [key: string]: INode } = {};
     const edges: { [key: string]: Edge } = {};
+    const metrics: { [key: string]: Metric } = {};
 
-    // const names = this.RgraphData ? Object.values(this.RgraphData.edges).map(edge => ({id: edge.way_id, name: edge.name}) ) : [];
+    const metric_lines = reversed_metrics_str.split('\n')
+    metric_lines.slice(1).forEach((line, index) => {
+      const [id, value] = line.split(',');
+      if(id && value){
+        metrics[Number(id)] = {
+          id: id,
+          value: value
+        }
+      }
+    })
+    
+    const metrics_values = Object.values(metrics).map(metric => ({id: metric.id, value: metric.value}));
 
     const node_lines = nodes_str.split('\n')
     node_lines.slice(1).forEach((line, index) => {
@@ -206,13 +247,14 @@ export class TownComponent implements OnInit, OnDestroy{
       // const id_way = line.split(',"')[0];
 
       // const name = names.find(n => n.id == id_way)?.name;
+      const m_val = metrics_values.find(m => m.id == id_way)?.value;
 
-      if(id_way && name){
+      if(id_way){
         nodes[Number(id_way)] = {
           lat: 0,
           lon: 0,
           way_id: Number(id_way),
-          name: name
+          name: m_val
         }
       }
     })

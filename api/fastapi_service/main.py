@@ -103,8 +103,7 @@ async def city_graph(
     status_code = 200
     detail = "OK"
 
-    points, edges, pprop, wprop  = await services.graph_from_ids(city_id=city_id, regions_ids=regions_ids, regions=regions_df)
-    
+    points, edges, pprop, wprop, metrics  = await services.graph_from_ids(city_id=city_id, regions_ids=regions_ids, regions=regions_df)
     if points is None:
         status_code = 404
         detail = "NOT FOUND"
@@ -112,7 +111,7 @@ async def city_graph(
         raise HTTPException(status_code=status_code, detail=detail)
 
     logger.info(f"{request} {status_code} {detail}")
-    return services.graph_to_scheme(points, edges, pprop, wprop)
+    return services.graph_to_scheme(points, edges, pprop, wprop, metrics)
 
 
 @app.post('/api/city/graph/bbox/{city_id}/', response_model=GraphBase)
@@ -126,7 +125,7 @@ async def city_graph_poly(
     detail = "OK"
 
     polygon = services.list_to_polygon(polygons=polygons_as_list)
-    points, edges, pprop, wprop = await services.graph_from_poly(city_id=city_id, polygon=polygon)
+    points, edges, pprop, wprop, metrics = await services.graph_from_poly(city_id=city_id, polygon=polygon)
     
     if points is None:
         status_code = 404
@@ -135,7 +134,7 @@ async def city_graph_poly(
         raise HTTPException(status_code=status_code, detail=detail)
     
     logger.info(f"{request} {status_code} {detail}")
-    return services.graph_to_scheme(points, edges, pprop, wprop)
+    return services.graph_to_scheme(points, edges, pprop, wprop, metrics)
 
     
 

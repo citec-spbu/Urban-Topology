@@ -9,10 +9,12 @@ export interface csv_result{
   edges_csv: string,
   points_csv: string,
   points_properties_csv: string,
-
+  metrics_csv: string,
+  
   reversed_edges_csv: string,
   reversed_nodes_csv: string,
   ways_properties_csv: string,
+  reversed_metrics_csv: string,
 }
 
 @Injectable({
