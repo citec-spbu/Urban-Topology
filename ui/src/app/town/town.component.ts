@@ -27,7 +27,6 @@ export class TownComponent implements OnInit, OnDestroy{
   rNodes?: string;
   rEdges?: string;
   metrics?: string;
-  rMetrics?: string;
 
   id?: number;
   town?: Town;
@@ -106,7 +105,6 @@ export class TownComponent implements OnInit, OnDestroy{
     delete this.pointPropsCsv;
     delete this.rNodes;
     delete this.rEdges;
-    delete this.rMetrics;
     delete this.metrics;
     delete this.LgraphData;
     delete this.RgraphData;
@@ -132,7 +130,6 @@ export class TownComponent implements OnInit, OnDestroy{
     this.wayPropsCsv = res.ways_properties_csv;
     this.rNodes = res.reversed_nodes_csv;
     this.rEdges = res.reversed_edges_csv;
-    this.rMetrics = res.reversed_metrics_csv;
     this.metrics = res.metrics_csv;
 
     this.getRgraph(res.points_csv, res.edges_csv, res.metrics_csv);
@@ -160,8 +157,6 @@ export class TownComponent implements OnInit, OnDestroy{
         saveText('points_properties.csv', this.pointPropsCsv, 'text/csv');
       if(this.wayPropsCsv) 
         saveText('ways_properties.csv', this.wayPropsCsv, 'text/csv');
-      if(this.rMetrics) 
-        saveText('reversed_metrics_csv.csv', this.rMetrics, 'text/csv');
       if(this.metrics) 
         saveText('metrics_csv.csv', this.metrics, 'text/csv');
     }
@@ -175,29 +170,38 @@ export class TownComponent implements OnInit, OnDestroy{
 
     const metric_lines = metrics_str.split('\n')
     metric_lines.slice(1).forEach((line, index) => {
-      const [id, value] = line.split(',');
-      if(id && value){
+      const [id, degree, eigenvector, closeness, betweenness_value] = line.split(',');
+      if(id){
         metrics[Number(id)] = {
           id: id,
-          value: value
+          degree: degree,
+          eigenvector: eigenvector,
+          closeness: closeness,
+          betweenness: betweenness_value
         }
       }
     })
 
-    const metrics_values = Object.values(metrics).map(metric => ({id: metric.id, value: metric.value}));
+    const metrics_values = Object.values(metrics).map(metric => ({id: metric.id, degree: metric.degree, eigenvector: metric.eigenvector, closeness: metric.closeness, betweenness: metric.betweenness}));
 
     const node_lines = nodes_str.split('\n')
     node_lines.slice(1).forEach((line, index) => {
       const [id, longitude, latitude] = line.split(',');
 
-      const m_val = metrics_values.find(m => m.id == id)?.value;
+      const degree_val = metrics_values.find(m => m.id == id)?.degree;
+      const eigenvector_val = metrics_values.find(m => m.id == id)?.eigenvector;
+      const closeness_val = metrics_values.find(m => m.id == id)?.closeness;
+      const betweenness_val = metrics_values.find(m => m.id == id)?.betweenness;
       
       if(id){
         nodes[Number(id)] = {
           lat: Number(latitude),
           lon: Number(longitude),
           way_id: Number(id),
-          metric_value: m_val
+          degree_value: degree_val,
+          eigenvector_value: eigenvector_val,
+          closeness_value: closeness_val,
+          betweenness_value: betweenness_val
         }
       }
     })
@@ -226,20 +230,6 @@ export class TownComponent implements OnInit, OnDestroy{
   getLgraph(nodes_str: string, edges_str: string, reversed_metrics_str : string){
     const nodes: { [key: string]: INode } = {};
     const edges: { [key: string]: Edge } = {};
-    const metrics: { [key: string]: Metric } = {};
-
-    const metric_lines = reversed_metrics_str.split('\n')
-    metric_lines.slice(1).forEach((line, index) => {
-      const [id, value] = line.split(',');
-      if(id && value){
-        metrics[Number(id)] = {
-          id: id,
-          value: value
-        }
-      }
-    })
-    
-    const metrics_values = Object.values(metrics).map(metric => ({id: metric.id, value: metric.value}));
 
     const node_lines = nodes_str.split('\n')
     node_lines.slice(1).forEach((line, index) => {
@@ -247,14 +237,13 @@ export class TownComponent implements OnInit, OnDestroy{
       // const id_way = line.split(',"')[0];
 
       // const name = names.find(n => n.id == id_way)?.name;
-      const m_val = metrics_values.find(m => m.id == id_way)?.value;
 
       if(id_way){
         nodes[Number(id_way)] = {
           lat: 0,
           lon: 0,
           way_id: Number(id_way),
-          name: m_val
+          name: name
         }
       }
     })

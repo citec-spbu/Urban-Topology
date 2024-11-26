@@ -70,7 +70,7 @@ def graph_to_scheme(points, edges, pprop, wprop, metrics) -> GraphBase:
     points_str, _ = list_to_csv_str(points, ['id', 'longitude', 'latitude'])
     pprop_str, _ = list_to_csv_str(pprop, ['id', 'property', 'value'])
     wprop_str, _ = list_to_csv_str(wprop, ['id', 'property', 'value'])
-    metrics_str, _ = list_to_csv_str(metrics, ['id', 'value'])
+    metrics_str, _ = list_to_csv_str(metrics, ['id', 'degree', 'eigenvector', 'closeness', 'betweenness'])
 
     r_edges_str, r_nodes_str, r_mertircs_str = reversed_graph_to_csv_str(edges_df)
 
@@ -709,12 +709,24 @@ def calc_metrics(points, edges):
     G.add_nodes_from(points_list)
     G.add_edges_from(edges_list)
 
-
+    degree_dict = nx.degree_centrality(G)
+    eigenvector_dict = nx.eigenvector_centrality(G, max_iter=1000)
+    closeness_dict = nx.closeness_centrality(G)
     betweenness_dict = nx.betweenness_centrality(G)
-    betweenness_list = [[k, v] for k, v in betweenness_dict.items()]
-    print("betweenness_list", betweenness_list[:10])
 
-    return betweenness_list
+    metrics_list = []
+    for node_id in degree_dict:
+        metrics_list.append(
+            [
+                node_id,
+                degree_dict[node_id],
+                eigenvector_dict[node_id],
+                closeness_dict[node_id],
+                betweenness_dict[node_id]
+            ]
+        )
+
+    return metrics_list
 
 def calc_rev_metrics(points_list, edges_list):
 

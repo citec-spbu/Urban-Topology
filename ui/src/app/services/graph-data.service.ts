@@ -15,7 +15,10 @@ export interface INode{
     lon: number,
     way_id: number,
     name?: string,
-    metric_value?: string
+    degree_value?: string,
+    eigenvector_value?: string,
+    closeness_value?: string,
+    betweenness_value?: string
 }
 
 export interface GraphData{
@@ -29,7 +32,10 @@ export interface GraphData{
 
 export interface Metric{
     id: string
-    value: string
+    degree: string
+    eigenvector: string
+    closeness: string
+    betweenness: string
   }
 
 @Injectable({providedIn: 'root'})
