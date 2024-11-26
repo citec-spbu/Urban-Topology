@@ -10,6 +10,8 @@ import pandas as pd
 import geopandas as gpd
 import services
 import logs 
+import json
+import os
 
 regions_df = gpd.read_file('./data/regions.json', driver='GeoJSON')
 cities_info = pd.read_csv('./data/cities.csv')
@@ -98,10 +100,16 @@ async def city_regions(
 async def city_graph(
     city_id: int,
     regions_ids: List[int],
+    use_cache: bool = True
 ):
     request = f"GET /api/cities/graph/?city_id={city_id}&regions={regions_ids}"
     status_code = 200
     detail = "OK"
+
+    cache_response_file_path = f"./data/caches/{city_id}_{regions_ids}.json"
+    if use_cache and os.path.exists(cache_response_file_path):
+        with open(cache_response_file_path, 'r') as f:
+            return json.load(f)
 
     points, edges, pprop, wprop, metrics  = await services.graph_from_ids(city_id=city_id, regions_ids=regions_ids, regions=regions_df)
     if points is None:
@@ -109,6 +117,9 @@ async def city_graph(
         detail = "NOT FOUND"
         logger.error(f"{request} {status_code} {detail}")
         raise HTTPException(status_code=status_code, detail=detail)
+    
+    with open (cache_response_file_path, "w+") as f:
+        json.dump(services.graph_to_scheme(points, edges, pprop, wprop, metrics).model_dump(), f)
 
     logger.info(f"{request} {status_code} {detail}")
     return services.graph_to_scheme(points, edges, pprop, wprop, metrics)
@@ -135,46 +146,3 @@ async def city_graph_poly(
     
     logger.info(f"{request} {status_code} {detail}")
     return services.graph_to_scheme(points, edges, pprop, wprop, metrics)
-
-    
-
-# Useless:
-
-# @app.delete("/api/delete/city/", response_model=CityBase)
-# @logger.catch(exclude=HTTPException)
-# async def delete_city(
-#     city_id: int
-# ): 
-#     request = f"GET /api/delete/city?city_id={city_id}/"
-#     status_code = 200
-#     detail = "OK"
-
-#     city = await services.delete_city(city_id=city_id)
-#     if city is None:
-#         status_code = 404
-#         detail = "NOT FOUND"
-#         logger.error(f"{request} {status_code} {detail}")
-#         raise HTTPException(status_code=status_code, detail=detail)
-
-#     logger.info(f"{request} {status_code} {detail}")
-#     return city
-
-# @app.get("/api/download/city/", response_model=CityBase)
-# @logger.catch(exclude=HTTPException)
-# async def download_city(
-#     city_id: int,
-#     extension: float
-# ): 
-#     request = f"GET /api/download/city?city_id={city_id}&extension={extension}/"
-#     status_code = 200
-#     detail = "OK"
-
-#     city = await services.download_city(city_id=city_id, extension=extension)
-#     if city is None:
-#         status_code = 404
-#         detail = "NOT FOUND"
-#         logger.error(f"{request} {status_code} {detail}")
-#         raise HTTPException(status_code=status_code, detail=detail)
-
-#     logger.info(f"{request} {status_code} {detail}")
-#     return city

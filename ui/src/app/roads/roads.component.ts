@@ -144,7 +144,10 @@ export class RoadsComponent implements OnInit {
           // Формируем popup с информацией о перекрестке
           const popupContent = `
         <b>Перекресток:</b><br>
-        Значение метрики: ${node.metric_value}<br>
+        Значение Degree Centrality: ${node.degree_value}<br>
+        Значение Closeness Centrality: ${node.closeness_value}<br>
+        Значение Eigenvector Centrality: ${node.eigenvector_value}<br>
+        Значение Betweenness Centrality: ${node.betweenness_value}<br>
         Идентификатор: ${nodeId}<br>
         Уникальных дорог: ${wayIds.size}<br>
         <b>Дороги:</b><br>
@@ -153,9 +156,9 @@ export class RoadsComponent implements OnInit {
 
           // Добавляем перекресток на карту
           L.circleMarker([node.lat, node.lon], {
-            radius: 3,
-            color: getColorBasedOnMetric(Number(node.metric_value)), // Красный цвет для перекрестков
-            fillColor: getColorBasedOnMetric(Number(node.metric_value)),
+            radius: 2 * (1 + 10*Number(node.betweenness_value)),
+            color: getColorBasedOnMetric(Number(node.betweenness_value)), // Красный цвет для перекрестков
+            fillColor: getColorBasedOnMetric(Number(node.betweenness_value)),
             fillOpacity: 0.8
           })
             .bindPopup(popupContent)
