@@ -10,8 +10,8 @@ import 'leaflet-easyprint';
 function getColorBasedOnMetric(value: number): string {
   value = Math.min(1,value * 4);
   const red = Math.floor(255 * (1 - value));
-  const green = Math.floor(255 * value);
-  const blue = 0; // Держим синий компонент на нуле для градации от красного к зеленому
+  const green = 0;
+  const blue = Math.floor(255 * value);
   return `rgb(${red}, ${green}, ${blue})`;
 }
 
@@ -104,9 +104,10 @@ export class RoadsComponent implements OnInit {
       // Отрисовка дорог
       if (edge.way_id) {
         if (!roads[edge.way_id]) {
-          const road_color = edge.name
-            ? iwanthue(1, { seed: edge.name })[0]
-            : '#ebebeb';
+          // const road_color = edge.name
+          //   ? iwanthue(1, { seed: edge.name })[0]
+          //   : '#ebebeb';
+          const road_color = '#85818c';
           roads[edge.way_id] = L.polyline(
             [
               [gd.nodes[edge.from].lat, gd.nodes[edge.from].lon],
