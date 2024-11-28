@@ -9,9 +9,9 @@ import 'leaflet-easyprint';
 
 function getColorBasedOnMetric(value: number): string {
   value = Math.min(1,value * 4);
-  const red = Math.floor(255 * (1 - value));
+  const red = Math.floor(255 * value);
   const green = 0;
-  const blue = Math.floor(255 * value);
+  const blue = Math.floor(255 *  (1 - value));
   return `rgb(${red}, ${green}, ${blue})`;
 }
 
@@ -157,7 +157,8 @@ export class RoadsComponent implements OnInit {
 
           // Добавляем перекресток на карту
           L.circleMarker([node.lat, node.lon], {
-            radius: 2 * (1 + 10*Number(node.betweenness_value)),
+            radius: (1 + 50*Number(node.betweenness_value)),
+            // radius: Math.exp(40*Number(node.betweenness_value))/70,
             color: getColorBasedOnMetric(Number(node.betweenness_value)), // Красный цвет для перекрестков
             fillColor: getColorBasedOnMetric(Number(node.betweenness_value)),
             fillOpacity: 0.8
