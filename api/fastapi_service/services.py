@@ -22,6 +22,19 @@ import pandas as pd
 import networkx as nx
 import time
 import networkx as nx
+import logging
+
+# Создайте или получите корневой логгер SQLAlchemy, установите уровень WARNING
+log = logging.getLogger('sqlalchemy.engine')
+log.setLevel(logging.WARNING)
+
+# Убедитесь, что обработчик лога убран, если он уже установлен
+if log.hasHandlers():
+    log.handlers.clear()
+
+# Если вы хотите полностью убрать любой вывод, вы можете добавить "глушитель":
+log.addHandler(logging.NullHandler())
+
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -72,7 +85,8 @@ def graph_to_scheme(points, edges, pprop, wprop, metrics) -> GraphBase:
     wprop_str, _ = list_to_csv_str(wprop, ['id', 'property', 'value'])
     metrics_str, _ = list_to_csv_str(metrics, ['id', 'degree', 'eigenvector', 'closeness', 'betweenness'])
 
-    r_edges_str, r_nodes_str, r_mertircs_str = reversed_graph_to_csv_str(edges_df)
+    # r_edges_str, r_nodes_str, r_mertircs_str = reversed_graph_to_csv_str(edges_df)
+    r_edges_str, r_nodes_str, r_mertircs_str = None, None, None
 
     return GraphBase(edges_csv=edges_str, points_csv=points_str, 
                      ways_properties_csv=wprop_str, points_properties_csv=pprop_str,
@@ -422,11 +436,15 @@ def polygons_from_region(regions_ids : List[int], regions : GeoDataFrame):
 
 
 async def graph_from_ids(city_id : int, regions_ids : List[int], regions : GeoDataFrame):
+    print(f"{datetime.now()} polygons_from_region begin")
     polygon = polygons_from_region(regions_ids=regions_ids, regions=regions)
+    print(f"{datetime.now()} polygons_from_region end")
     if polygon == None:
         return None, None, None, None, None
-    return await graph_from_poly(city_id=city_id, polygon=polygon)
-
+    print(f"{datetime.now()} graph_from_poly begin")
+    gfp = await graph_from_poly(city_id=city_id, polygon=polygon)
+    print(f"{datetime.now()} graph_from_poly end")
+    return gfp
 
 def point_obj_to_list(db_record) -> List:
     return [db_record.id, db_record.longitude, db_record.latitude]
@@ -437,7 +455,7 @@ def edge_obj_to_list(db_record) -> List:
 
 
 def record_obj_to_wprop(record):
-    return [record.id_way ,record.property ,record.value]
+    return [record.id_way, record.property ,record.value]
 
 
 def record_obj_to_pprop(record):
@@ -451,6 +469,8 @@ async def graph_from_poly(city_id, polygon):
     city = await database.fetch_one(q)
     if city is None or not city.downloaded:
         return None, None, None, None
+    
+    print(f"{datetime.now()} q1 begin")
     query = text(
         f"""SELECT p.id, p.longitude, p.latitude 
         FROM "Points" p
@@ -461,18 +481,26 @@ async def graph_from_poly(city_id, polygon):
         AND (p.latitude BETWEEN {bbox[1]} AND {bbox[3]});
         """
     )
+    print(f"{datetime.now()} q1 end")
 
+    print(f"{datetime.now()} fetch_all begin")
     res = await database.fetch_all(query)
     points = list(map(point_obj_to_list, res)) # [...[id, longitude, latitude]...]
+    print(f"{datetime.now()} fetch_all end")
 
+    print(f"{datetime.now()} q2 begin")
     q = PropertyAsync.select().where(PropertyAsync.c.property == 'name')
     prop = await database.fetch_one(q)
     prop_id_name = prop.id
+    print(f"{datetime.now()} q2 end")
 
+    print(f"{datetime.now()} q3 begin")
     q = PropertyAsync.select().where(PropertyAsync.c.property == 'highway')
     prop = await database.fetch_one(q)
     prop_id_highway = prop.id
+    print(f"{datetime.now()} q3 end")
 
+    print(f"{datetime.now()} q4 begin")
     road_types = ('motorway', 'trunk', 'primary', 'secondary', 'tertiary',
                   'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link')
     road_types_query = build_in_query('wp_h.value', road_types)
@@ -524,33 +552,88 @@ async def graph_from_poly(city_id, polygon):
 
     res = await database.fetch_all(query)
     edges = list(map(edge_obj_to_list, res)) # [...[id, id_way, from, to, name]...]
+    print(f"{datetime.now()} q4 end")
 
+    print(f"{datetime.now()} filter by polygon begin")
     points, edges, ways_prop_ids, points_prop_ids  = filter_by_polygon(polygon=polygon, edges=edges, points=points)
+    print(f"{datetime.now()} filter by polygon end")
+
     conn = engine.connect()
 
+    print(f"{datetime.now()} q5 begin")
     ids_ways = build_in_query('id_way', ways_prop_ids)
+    # print("ids_ways content:", ids_ways)
     query = text(
-        f"""SELECT id_way, property, value FROM 
-        (SELECT id_way, id_property, value FROM "WayProperties" WHERE {ids_ways}) AS p 
-        JOIN "Properties" ON p.id_property = "Properties".id;
+        f"""
+        SELECT
+            id_way,
+            property,
+            value
+        FROM (
+            SELECT
+                id_way,
+                id_property,
+                value
+            FROM "WayProperties" WHERE {ids_ways}
+        ) AS p 
+        JOIN "Properties"
+        ON p.id_property = "Properties".id;
         """)
 
-    res = conn.execute(query).fetchall()
+    # res = conn.execute(query).fetchall()
+    res = await database.fetch_all(query)
     ways_prop = list(map(record_obj_to_wprop, res))
+    print(f"{datetime.now()} q5 end")
+
+    print(f"{datetime.now()} q6 begin")
 
     ids_points = build_in_query('id_point', points_prop_ids)
+
+    metadata = MetaData()
+
+    # Определите временную таблицу (например, для PostgreSQL)
+    temp_table = Table(
+        'temp_ids_point', metadata,
+        Column('id_point', Integer, primary_key=True)
+    )
+
+    # Создайте временную таблицу
+    conn.execute(text("CREATE TEMPORARY TABLE temp_ids_point (id_point BIGINT PRIMARY KEY);"))
+    
+    # Заполните временную таблицу данными из id_list
+    conn.execute(temp_table.insert(), [{'id_point': id} for id in points_prop_ids])
+
+    # print("ids_points content:", ids_points)
     query = text(
-        f"""SELECT id_point, property, value FROM 
-        (SELECT id_point, id_property, value FROM "PointProperties" WHERE {ids_points}) AS p 
+        f"""
+        SELECT
+            id_point,
+            property,
+            value
+        FROM (
+            SELECT
+                pp.id_point as id_point,
+                pp.id_property as id_property,
+                pp.value as value
+            FROM "PointProperties" pp
+            JOIN "temp_ids_point" t
+            ON pp.id_point = t.id_point
+        ) AS p 
         JOIN "Properties" ON p.id_property = "Properties".id;
         """)
 
     res = conn.execute(query).fetchall()
+    conn.execute(text("DROP TABLE temp_ids_point;"))
+    # res = await database.fetch_all(query)
     points_prop = list(map(record_obj_to_pprop, res))
 
-    conn.close()
+    # conn.close()
+
+    print(f"{datetime.now()} q6 end")
+    print(f"{datetime.now()} metrics begin")
 
     metrics = calc_metrics(points, edges)
+    print(f"{datetime.now()} metrics end")
 
     return points, edges, points_prop, ways_prop, metrics
 
@@ -701,18 +784,26 @@ def calc_metrics(points, edges):
     points_list = [point[0] for point in points]
     edges_list = [(edge[2], edge[3]) for edge in edges]
 
-    print("CHECK")
-    print("points", points[:10])
-    print("edges", edges[:10])
-
+    print(f"{datetime.now()} calc metrics begin")
+    print(f"{datetime.now()} graph building begin")
     G = nx.Graph()
     G.add_nodes_from(points_list)
     G.add_edges_from(edges_list)
+    print(f"{datetime.now()} graph building end")
 
+    print(f"{datetime.now()} degree begin")
     degree_dict = nx.degree_centrality(G)
+    print(f"{datetime.now()} degree end")
+    print(f"{datetime.now()} eigenvector end")
     eigenvector_dict = nx.eigenvector_centrality(G, max_iter=1000)
-    closeness_dict = nx.closeness_centrality(G)
-    betweenness_dict = nx.betweenness_centrality(G)
+    print(f"{datetime.now()} eigenvector end")
+    print(f"{datetime.now()} closeness begin")
+    # closeness_dict = nx.closeness_centrality(G)
+    print(f"{datetime.now()} closeness end")
+    print(f"{datetime.now()} betweenness begin")
+    betweenness_dict = nx.betweenness_centrality(G, k=100)
+    # betweenness_dict = calculate_betweenness_centrality(points_list, edges_list)
+    print(f"{datetime.now()} betweenness end")
 
     metrics_list = []
     for node_id in degree_dict:
@@ -721,18 +812,16 @@ def calc_metrics(points, edges):
                 node_id,
                 degree_dict[node_id],
                 eigenvector_dict[node_id],
-                closeness_dict[node_id],
+                # closeness_dict[node_id],
+                0.0, #closeness dummy
                 betweenness_dict[node_id]
             ]
         )
 
+    print(f"{datetime.now()} calc metrics end")
     return metrics_list
 
 def calc_rev_metrics(points_list, edges_list):
-
-    print("CHECK REV")
-    print("points rev", points_list[:10])
-    print("edges rev", edges_list[:10])
 
     G = nx.Graph()
     G.add_nodes_from(points_list)
@@ -741,6 +830,5 @@ def calc_rev_metrics(points_list, edges_list):
 
     betweenness_dict = nx.betweenness_centrality(G)
     betweenness_list = [[k, v] for k, v in betweenness_dict.items()]
-    print("betweenness_list rev", betweenness_list[:10])
 
     return betweenness_list

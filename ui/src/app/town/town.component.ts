@@ -227,9 +227,11 @@ export class TownComponent implements OnInit, OnDestroy{
     // console.log(this.RgraphData)
   }
   
-  getLgraph(nodes_str: string, edges_str: string, reversed_metrics_str : string){
+  getLgraph(nodes_str?: string, edges_str?: string, reversed_metrics_str?: string){
     const nodes: { [key: string]: INode } = {};
     const edges: { [key: string]: Edge } = {};
+    
+    if (!nodes_str || !edges_str) return;
 
     const node_lines = nodes_str.split('\n')
     node_lines.slice(1).forEach((line, index) => {
