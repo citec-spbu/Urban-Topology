@@ -12,6 +12,7 @@ import services
 import logs 
 import json
 import os
+from datetime import datetime
 
 regions_df = gpd.read_file('./data/regions.json', driver='GeoJSON')
 cities_info = pd.read_csv('./data/cities.csv')
@@ -111,7 +112,9 @@ async def city_graph(
         with open(cache_response_file_path, 'r') as f:
             return json.load(f)
 
+    print(f"{datetime.now()} graph_from_ids begin")
     points, edges, pprop, wprop, metrics  = await services.graph_from_ids(city_id=city_id, regions_ids=regions_ids, regions=regions_df)
+    print(f"{datetime.now()} graph_from_ids end")
     if points is None:
         status_code = 404
         detail = "NOT FOUND"
