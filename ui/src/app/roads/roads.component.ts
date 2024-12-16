@@ -145,8 +145,9 @@ export class RoadsComponent implements OnInit {
           // Формируем popup с информацией о перекрестке
           const popupContent = `
         <b>Перекресток:</b><br>
-        Значение Degree Centrality: ${node.degree_value}<br>
-        Значение Closeness Centrality: ${node.closeness_value}<br>
+        Значение Degree вершины: ${node.degree_value}<br>
+        Значение In-Degree Centrality: ${node.in_degree_value}<br>
+        Значение Out-Degree Centrality: ${node.out_degree_value}<br>
         Значение Eigenvector Centrality: ${node.eigenvector_value}<br>
         Значение Betweenness Centrality: ${node.betweenness_value}<br>
         Идентификатор: ${nodeId}<br>
