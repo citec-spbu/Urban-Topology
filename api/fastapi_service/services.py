@@ -64,20 +64,6 @@ def list_to_csv_str(data, columns : List['str']):
     df.to_csv(buffer, index=False)
     return buffer.getvalue(), df
 
-
-def reversed_graph_to_csv_str(edges_df : DataFrame):
-    redges_df, rnodes_df, reversed_metrics_df = get_reversed_graph(edges_df, "id_way")
-
-    redges = io.StringIO()
-    rnodes = io.StringIO()
-    rmetrics = io.StringIO()
-
-    redges_df.to_csv(redges, index=False)
-    rnodes_df.to_csv(rnodes, index=False)
-    reversed_metrics_df.to_csv(rmetrics, index=False)
-    return redges.getvalue(), rnodes.getvalue(), rmetrics.getvalue()
-
-
 def graph_to_scheme(points, edges, pprop, wprop, metrics) -> GraphBase:
     edges_str, edges_df = list_to_csv_str(edges, ['id', 'id_way', 'source', 'target', 'name'])
     points_str, _ = list_to_csv_str(points, ['id', 'longitude', 'latitude'])
@@ -167,7 +153,7 @@ def add_graph_to_db(city_id: int, file_path: str, city_name: str) -> None:
             command = f'''/osmosis/bin/osmosis --read-pbf-fast file="{file_path}" --tf accept-ways highway={",".join(required_road_types)} \
                           --tf reject-ways side_road=yes --used-node --write-pbf omitmetadata=true file="{road_file_path}" \
                           && /osmosis/bin/osmosis --read-pbf-fast file="{road_file_path}" --write-pgsimp authFile="{AUTH_FILE_PATH}" \
-                          && rm {road_file_path}
+                          && rm "{road_file_path}"
                        '''
             res = os.system(command)     
 
@@ -323,7 +309,7 @@ def add_graph_to_db(city_id: int, file_path: str, city_name: str) -> None:
 
 def add_point_to_db(df : DataFrame) -> int:
     with SessionLocal.begin() as session:
-        point = Point(latitude=df['Широта'], longitude=df['Долгота'])
+        point = Point(latitude=float(df['Широта']), longitude=float(df['Долгота']))
         session.add(point)
         session.flush()
         return point.id
@@ -331,7 +317,7 @@ def add_point_to_db(df : DataFrame) -> int:
 
 def add_property_to_db(df : DataFrame) -> int:
     with SessionLocal.begin() as session:
-        property = CityProperty(c_latitude=df['Широта'], c_longitude=df['Долгота'], population=df['Население'], time_zone=df['Часовой пояс'])
+        property = CityProperty(c_latitude=float(df['Широта']), c_longitude=float(df['Долгота']), population=int(df['Население']), time_zone=df['Часовой пояс'])
         session.add(property)
         session.flush()
         return property.id
@@ -628,7 +614,9 @@ async def graph_from_poly(city_id, polygon):
     print(f"{datetime.now()} q6 end")
     print(f"{datetime.now()} metrics begin")
 
-    metrics = calc_metrics(points, edges)
+    oneway_ids = await get_oneway_ids(city_id=city_id)
+    metrics = await calc_metrics(points, edges, oneway_ids)
+
     print(f"{datetime.now()} metrics end")
 
     return points, edges, points_prop, ways_prop, metrics
