@@ -12,6 +12,7 @@ from pandas.core.frame import DataFrame
 from osm_handler import parse_osm
 from typing import List, Iterable, Union, TYPE_CHECKING
 from sqlalchemy import update, text
+from datetime import datetime
 
 import pandas as pd
 import osmnx as ox
@@ -23,7 +24,6 @@ import networkx as nx
 import time
 import networkx as nx
 import logging
-from datetime import datetime
 
 # Создайте или получите корневой логгер SQLAlchemy, установите уровень WARNING
 log = logging.getLogger('sqlalchemy.engine')
