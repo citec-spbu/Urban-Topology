@@ -23,6 +23,7 @@ import networkx as nx
 import time
 import networkx as nx
 import logging
+from datetime import datetime
 
 # Создайте или получите корневой логгер SQLAlchemy, установите уровень WARNING
 log = logging.getLogger('sqlalchemy.engine')
