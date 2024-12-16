@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild} from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Region, Town, _distBounds } from '../interfaces/town';
 import { FileService } from '../services/file.service';
@@ -8,7 +8,7 @@ import { saveText } from '../graph/saveAsPNG';
 
 import * as L from 'leaflet'; //* - все
 
-enum sections{
+enum sections {
   map = 'map',
   roads = 'roads'
 }
@@ -19,7 +19,7 @@ enum sections{
   templateUrl: './town.component.html',
   styleUrls: ['./town.component.css', './loader.css']
 })
-export class TownComponent implements OnInit, OnDestroy{
+export class TownComponent implements OnInit, OnDestroy {
 
   wayPropsCsv?: string;
   pointPropsCsv?: string;
@@ -35,11 +35,11 @@ export class TownComponent implements OnInit, OnDestroy{
   loading: boolean = false;
 
   private _section: sections = sections.map;
-  set section(val: sections | string){
+  set section(val: sections | string) {
     this._section = val as sections;
     const achor = document.getElementsByName(val)[0];
-    achor?.scrollIntoView({behavior: 'smooth'});
-  } get section(){return this._section}; // section=val вызывает set section(val), val=section вызывает get section
+    achor?.scrollIntoView({ behavior: 'smooth' });
+  } get section() { return this._section }; // section=val вызывает set section(val), val=section вызывает get section
 
   townSub?: any;
 
@@ -52,17 +52,17 @@ export class TownComponent implements OnInit, OnDestroy{
     private graphDataService: GraphDataService
   ) {
     this.section = sections.map;
-    this.route.paramMap.subscribe(params=>{
+    this.route.paramMap.subscribe(params => {
       let id = params.get('id');
-      if(id){
+      if (id) {
         this.townSub?.unsubscribe();
-        this.id= Number(id);
-        this.townSub = this.townService.getTown( id ).subscribe(
-          town=>{
+        this.id = Number(id);
+        this.townSub = this.townService.getTown(id).subscribe(
+          town => {
             this.town = town;
             this.getDistricts(town);
           },
-          error=>{this.router.navigate(['/towns'])}
+          error => { this.router.navigate(['/towns']) }
         )
       } else {
         this.router.navigate(['/towns']);
@@ -71,21 +71,21 @@ export class TownComponent implements OnInit, OnDestroy{
   }
 
 
-  ngOnInit(): void {}
+  ngOnInit(): void { }
   ngOnDestroy(): void {
     this.townSub?.unsubscribe();
   }
 
-  getCenter(): L.LatLngTuple{
-    if(!this.town) return [59.9414, 30.3267];
-    return [ this.town.property.c_latitude, this.town.property.c_longitude ];
+  getCenter(): L.LatLngTuple {
+    if (!this.town) return [59.9414, 30.3267];
+    return [this.town.property.c_latitude, this.town.property.c_longitude];
   }
 
-  getDistricts(town: Town): void{
+  getDistricts(town: Town): void {
     this.townService.getTownRegions(town.id).subscribe(res => {
       const levels: any = {};
       res.forEach(value => {
-        if( !levels[value.admin_level] ) levels[value.admin_level] = [];
+        if (!levels[value.admin_level]) levels[value.admin_level] = [];
 
         levels[value.admin_level].push(value);
       })
@@ -93,21 +93,21 @@ export class TownComponent implements OnInit, OnDestroy{
     })
   }
 
-  handlePolygon(ev: {name: string, regionId?: number, polygon?: any}){
-    if(!this.id) return;
+  handlePolygon(ev: { name: string, regionId?: number, polygon?: any }) {
+    if (!this.id) return;
     this.graphName = ev.name;
     delete this.wayPropsCsv;
     delete this.pointPropsCsv;
     delete this.metrics;
     delete this.RgraphData;
 
-    if(ev.regionId){
+    if (ev.regionId) {
       this.loading = true;
       this.cdRef.detectChanges();
       this.townService.getGraphFromId(this.id, ev.regionId).subscribe(this.graphSubscriber)
       return;
     }
-    if(ev.polygon){
+    if (ev.polygon) {
       const nodes = ev.polygon.getLatLngs()[0] as L.LatLng[];
       const body: [number, number][] = nodes.map(node => [node.lng, node.lat]);
       this.loading = true;
