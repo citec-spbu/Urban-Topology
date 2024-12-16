@@ -16,8 +16,9 @@ export interface INode{
     way_id: number,
     name?: string,
     degree_value?: string,
+    in_degree_value?: string,
+    out_degree_value?: string,
     eigenvector_value?: string,
-    closeness_value?: string,
     betweenness_value?: string
 }
 
@@ -31,10 +32,11 @@ export interface GraphData{
 }
 
 export interface Metric{
-    id: string
-    degree: string
+    id: string,
+    degree: string,
+    in_degree: string,
+    out_degree: string,
     eigenvector: string
-    closeness: string
     betweenness: string
   }
 
