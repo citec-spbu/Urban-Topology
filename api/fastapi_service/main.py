@@ -120,12 +120,14 @@ async def city_graph(
         detail = "NOT FOUND"
         logger.error(f"{request} {status_code} {detail}")
         raise HTTPException(status_code=status_code, detail=detail)
-    
+
+    graphBase = services.graph_to_scheme(points, edges, pprop, wprop, metrics)
+
     with open (cache_response_file_path, "w+") as f:
-        json.dump(services.graph_to_scheme(points, edges, pprop, wprop, metrics).model_dump(), f)
+        json.dump(graphBase.model_dump(), f)
 
     logger.info(f"{request} {status_code} {detail}")
-    return services.graph_to_scheme(points, edges, pprop, wprop, metrics)
+    return graphBase
 
 
 @app.post('/api/city/graph/bbox/{city_id}/', response_model=GraphBase)
