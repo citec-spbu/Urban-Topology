@@ -12,7 +12,6 @@ import { ToolbarComponent } from './toolbar/toolbar.component';
 import { SafePipe } from './pipes/safe.pipe';
 import { LeafletModule } from '@asymmetrik/ngx-leaflet';
 import { MapComponent } from './map/map.component';
-import { GraphComponent } from './graph/graph.component';
 import { RoadsComponent } from './roads/roads.component'
 
 @NgModule({
@@ -23,7 +22,6 @@ import { RoadsComponent } from './roads/roads.component'
     ToolbarComponent,
     SafePipe,
     MapComponent,
-    GraphComponent,
     RoadsComponent
   ],
   imports: [

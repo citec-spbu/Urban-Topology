@@ -10,18 +10,13 @@
             ></app-map> <!-- handlePolygon($event) вызывается при изменении graphInfo и реагирует на изменение. getCenter() вызывается при отрисовке блока и присваивает значение center-->
         </ng-container>
     </div>
-    <div class="graphWrapper">
-        <a name="graph"></a>
-        <app-graph *ngIf="LgraphData" [graphData]="LgraphData" [name]="graphName" [loading]="loading" (downloadLgraph)="handleDownload('l')"></app-graph>
-    </div>
     <div class="roadsWrapper">
         <a name="roads"></a>
-        <app-roads *ngIf="RgraphData" [graphData]="RgraphData" [loading]="loading" [center]="getCenter()" (downloadRgraph)="handleDownload('r')"></app-roads>
+        <app-roads *ngIf="RgraphData" [graphData]="RgraphData" [loading]="loading" [center]="getCenter()" (downloadRgraph)="handleDownload()"></app-roads>
     </div>
 
     <div class="nav">
         <button title="Map" [ngClass]="{'active': section == 'map'}" (click)="section = 'map'"></button>
-        <button title="Graph" [ngClass]="{'active': section == 'graph'}" (click)="section = 'graph'" [disabled]="!LgraphData"></button>
         <button title="Roads" [ngClass]="{'active': section == 'roads'}" (click)="section = 'roads'" [disabled]="!RgraphData"></button>
     </div>
 </div>

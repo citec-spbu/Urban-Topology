@@ -12,6 +12,7 @@ from pandas.core.frame import DataFrame
 from osm_handler import parse_osm
 from typing import List, Iterable, Union, TYPE_CHECKING
 from sqlalchemy import update, text
+from datetime import datetime
 
 import pandas as pd
 import osmnx as ox
@@ -64,34 +65,16 @@ def list_to_csv_str(data, columns : List['str']):
     df.to_csv(buffer, index=False)
     return buffer.getvalue(), df
 
-
-def reversed_graph_to_csv_str(edges_df : DataFrame):
-    redges_df, rnodes_df, reversed_metrics_df = get_reversed_graph(edges_df, "id_way")
-
-    redges = io.StringIO()
-    rnodes = io.StringIO()
-    rmetrics = io.StringIO()
-
-    redges_df.to_csv(redges, index=False)
-    rnodes_df.to_csv(rnodes, index=False)
-    reversed_metrics_df.to_csv(rmetrics, index=False)
-    return redges.getvalue(), rnodes.getvalue(), rmetrics.getvalue()
-
-
 def graph_to_scheme(points, edges, pprop, wprop, metrics) -> GraphBase:
     edges_str, edges_df = list_to_csv_str(edges, ['id', 'id_way', 'source', 'target', 'name'])
     points_str, _ = list_to_csv_str(points, ['id', 'longitude', 'latitude'])
     pprop_str, _ = list_to_csv_str(pprop, ['id', 'property', 'value'])
     wprop_str, _ = list_to_csv_str(wprop, ['id', 'property', 'value'])
-    metrics_str, _ = list_to_csv_str(metrics, ['id', 'degree', 'eigenvector', 'closeness', 'betweenness'])
-
-    # r_edges_str, r_nodes_str, r_mertircs_str = reversed_graph_to_csv_str(edges_df)
-    r_edges_str, r_nodes_str, r_mertircs_str = None, None, None
+    metrics_str, _ = list_to_csv_str(metrics, ['id', 'degree', 'in_degree', 'out_degree', 'eigenvector', 'betweenness'])
 
     return GraphBase(edges_csv=edges_str, points_csv=points_str, 
                      ways_properties_csv=wprop_str, points_properties_csv=pprop_str,
-                     reversed_edges_csv=r_edges_str, reversed_nodes_csv=r_nodes_str,
-                     metrics_csv=metrics_str, reversed_metrics_csv=r_mertircs_str)
+                     metrics_csv=metrics_str)
 
 
 async def property_to_scheme(property : CityProperty) -> PropertyBase:
@@ -171,7 +154,7 @@ def add_graph_to_db(city_id: int, file_path: str, city_name: str) -> None:
             command = f'''/osmosis/bin/osmosis --read-pbf-fast file="{file_path}" --tf accept-ways highway={",".join(required_road_types)} \
                           --tf reject-ways side_road=yes --used-node --write-pbf omitmetadata=true file="{road_file_path}" \
                           && /osmosis/bin/osmosis --read-pbf-fast file="{road_file_path}" --write-pgsimp authFile="{AUTH_FILE_PATH}" \
-                          && rm {road_file_path}
+                          && rm "{road_file_path}"
                        '''
             res = os.system(command)     
 
@@ -327,7 +310,7 @@ def add_graph_to_db(city_id: int, file_path: str, city_name: str) -> None:
 
 def add_point_to_db(df : DataFrame) -> int:
     with SessionLocal.begin() as session:
-        point = Point(latitude=df['Широта'], longitude=df['Долгота'])
+        point = Point(latitude=float(df['Широта']), longitude=float(df['Долгота']))
         session.add(point)
         session.flush()
         return point.id
@@ -335,7 +318,7 @@ def add_point_to_db(df : DataFrame) -> int:
 
 def add_property_to_db(df : DataFrame) -> int:
     with SessionLocal.begin() as session:
-        property = CityProperty(c_latitude=df['Широта'], c_longitude=df['Долгота'], population=df['Население'], time_zone=df['Часовой пояс'])
+        property = CityProperty(c_latitude=float(df['Широта']), c_longitude=float(df['Долгота']), population=int(df['Население']), time_zone=df['Часовой пояс'])
         session.add(property)
         session.flush()
         return property.id
@@ -632,7 +615,9 @@ async def graph_from_poly(city_id, polygon):
     print(f"{datetime.now()} q6 end")
     print(f"{datetime.now()} metrics begin")
 
-    metrics = calc_metrics(points, edges)
+    oneway_ids = await get_oneway_ids(city_id=city_id)
+    metrics = await calc_metrics(points, edges, oneway_ids)
+
     print(f"{datetime.now()} metrics end")
 
     return points, edges, points_prop, ways_prop, metrics
@@ -674,161 +659,57 @@ def filter_by_polygon(polygon, edges, points):
 
     return points_filtred, edges_filtred, ways_prop_ids, points_ids
 
-
-def squeeze_graph(df_original: DataFrame) -> DataFrame:
-    """Очистка исходного DataFrame от неименнованных улиц и связывание именнованных улиц через неименнованные.
-    """
-    df = df_original.copy(deep=True)
-    df_streets_nan_right = df.loc[(df["street_name1"].notna()) & (df["street_name2"].isna())] # Связи с левой именнованной улицей и правой неименнованной
-    df_streets_nan_left = df.loc[df["street_name1"].isna()] # Связи с левой неименнованной улицей
-    df = df.loc[(df["street_name1"].notna()) & (df["street_name2"].notna())] # Удаление связей с неименнованными улицами
-    visited_streets = set(df_streets_nan_right.apply(lambda x: str(x["id_way1"]), axis=1) + "_" + df_streets_nan_right.apply(lambda x: str(x["id_way2"]), axis=1)) # Отмечаем посещенные связи
-    while True:
-        df_conn_nan_streets = df_streets_nan_right.join(df_streets_nan_left.set_index("id_way1"), on="id_way2", how="inner", lsuffix="in", rsuffix="out") # К левым именнованным добавляем левые неименнованные
-        df_conn_nan_streets = df_conn_nan_streets.loc[df_conn_nan_streets["crossroadin"] != df_conn_nan_streets["crossroadout"]] # Проверка на разные перекрестки для связей
-        if df_conn_nan_streets.empty: # Проверка на наличие улиц
-            break
-        df_conn_nan_streets = df_conn_nan_streets.loc[~(df_conn_nan_streets.apply(lambda x: str(x["id_way2in"]), axis=1) + "_" + \
-                                                    df_conn_nan_streets.apply(lambda x: str(x["id_way2out"]), axis=1)).isin(visited_streets)] # Проверка на посещенные связи
-        if df_conn_nan_streets.empty: # Проверка на наличие улиц
-            break
-        new_visited_streets = set(df_conn_nan_streets.apply(lambda x: str(x["id_way2in"]), axis=1) + "_" + df_conn_nan_streets.apply(lambda x: str(x["id_way2out"]), axis=1)) # Новые посещенные связи
-        visited_streets = visited_streets.union(new_visited_streets) # Обновление
-        df_conn_nan_streets = df_conn_nan_streets[["crossroadout", "street_name1in", "id_way1", "street_name2out", "id_way2out"]] # Выборка
-        df_conn_nan_streets = df_conn_nan_streets.rename(columns={"crossroadout": "crossroad", "street_name1in": "street_name1", "street_name2out": "street_name2", "id_way2out": "id_way2"}) # Переименование
-        df_to_add = df_conn_nan_streets.loc[(df_conn_nan_streets["street_name2"].notna()) & (df_conn_nan_streets["street_name1"] != df_conn_nan_streets["street_name2"])].drop_duplicates() # Связи, для которых были найдены правые именнованые улицы
-        df = pd.concat([df, df_to_add], ignore_index=True) # Добавление этих связей к основным
-        df_streets_nan_right = df_conn_nan_streets.loc[(df_conn_nan_streets["street_name2"].isna())] # Обновление связей с левой именнованной улицей и правой неименнованной
-    return df
-
-
-def get_reversed_graph(graph: DataFrame, way_column: str):
-    way_ids = graph[way_column]
-    in_query_way_ids = build_in_query("w.id", way_ids)
-
-    conn = engine.connect()
+async def get_oneway_ids(city_id: int) -> List[int]:
     query = text(
-        f"""WITH way_names AS
-        (
-            SELECT 
-                wp.id_way,
-                wp.value AS name
-            FROM "WayProperties" wp
-                JOIN "Properties" p ON wp.id_property = p.id
-            WHERE p.property = 'name'
-        )
-        , way_types AS
-        (
-            SELECT 
-                wp.id_way,
-                wp.value AS type
-            FROM "WayProperties" wp
-                JOIN "Properties" p ON wp.id_property = p.id
-            WHERE p.property = 'highway'  
-        )
-        , city_way_names AS
-        (
-            SELECT 
-                w.id,
-                wn.name,
-                wt.type
-            FROM "Ways" w
-                LEFT JOIN way_names wn ON w.id = wn.id_way
-                LEFT JOIN way_types wt ON w.id = wt.id_way
-            WHERE {in_query_way_ids}
-        )
-        SELECT 
-            e1.id_dist AS crossroad,
-            wn1.name AS street_name1,
-            wn1.type AS street_type1,
-            wn1.id AS id_way1,
-            wn2.name AS street_name2,
-            wn2.type AS street_type2,
-            wn2.id AS id_way2
-        FROM "Edges" e1
-        JOIN "Edges" e2 ON e1.id_src = e2.id_dist AND e1.id_way <> e2.id_way
-        JOIN city_way_names wn1 ON e1.id_way = wn1.id
-        JOIN city_way_names wn2 ON e2.id_way = wn2.id
-        WHERE (wn1.name <> wn2.name) OR (wn1.name IS NULL OR wn2.name IS NULL)
-        """)
-    
-    # res = await database.fetch_all(query)
-    res = conn.execute(query).fetchall()
+        """
+        SELECT DISTINCT wp.id_way
+        FROM "WayProperties" wp
+        JOIN "Properties" p ON wp.id_property = p.id
+        JOIN "Ways" w ON w.id = wp.id_way
+        WHERE p.property = 'oneway' AND wp.value = 'yes' AND w.id_city = :city_id;
+        """
+    )
+    with engine.connect() as conn:
+        result = conn.execute(query, {"city_id": city_id}).fetchall()
+        return [row[0] for row in result]
 
-    conn.close()
-    street_connection = list(map(lambda x: (x.crossroad, x.street_name1, x.id_way1, x.street_name2, x.id_way2), res))
-    df = DataFrame(street_connection, columns=["crossroad", "street_name1", "id_way1", "street_name2", "id_way2"])
-
-    # Получение именнованных улиц и их составляющих
-    df_named_pairs = df.loc[(df["street_name1"].notna()) & (df["street_name2"].notna())]
-    df_street_way = pd.concat([df_named_pairs[["street_name1", "id_way1"]], \
-                               df_named_pairs[["street_name2", "id_way2"]].rename(columns={"street_name2": "street_name1", "id_way2": "id_way1"})]).drop_duplicates().reset_index(drop=True)
-    
-    nodes_df = df_street_way.groupby("street_name1", group_keys=False).agg(lambda x: set(x)).reset_index().rename(columns={"street_name1": "street_name", "id_way1": "id_way"}).reset_index()
-
-    # Получение связей улиц
-    df_connections = squeeze_graph(df)
-    df_connections = df_connections.join(nodes_df[["index", "street_name"]].set_index("street_name"), on="street_name1", how="inner").rename(columns={"index": "src_index"})
-    df_connections = df_connections.join(nodes_df[["index", "street_name"]].set_index("street_name"), on="street_name2", how="inner").rename(columns={"index": "dest_index"})
-    edges_df = df_connections[["src_index", "dest_index"]].drop_duplicates().reset_index(drop=True)
-
-    nodes_list = nodes_df["id_way"].values.tolist()
-    edges_list = edges_df[["src_index", "dest_index"]].values.tolist()
-
-    reversed_metrics = calc_rev_metrics([i for i in range(len(edges_list))], edges_list)
-    reversed_metrics_df = pd.DataFrame(reversed_metrics, columns=["id_way", "value"]).reset_index(drop=True)
-
-    return edges_df, nodes_df, reversed_metrics_df
-
-def calc_metrics(points, edges):
+async def calc_metrics(points, edges, oneway_ids):
     points_list = [point[0] for point in points]
-    edges_list = [(edge[2], edge[3]) for edge in edges]
-
+    edges_list = [(edge[2], edge[3]) for edge in edges]  # Ориентированные ребра
+    reversed_edges_list = [(edge[3], edge[2]) for edge in edges if edge[1] not in oneway_ids]  # Обратные ребра для двусторонних дорог
     print(f"{datetime.now()} calc metrics begin")
     print(f"{datetime.now()} graph building begin")
-    G = nx.Graph()
+
+    G = nx.DiGraph()  # Ориентированный граф
     G.add_nodes_from(points_list)
-    G.add_edges_from(edges_list)
+    G.add_edges_from(edges_list)  # Добавляем основные направления
+    G.add_edges_from(reversed_edges_list)  # Добавляем обратные направления для двусторонних дорог
     print(f"{datetime.now()} graph building end")
 
     print(f"{datetime.now()} degree begin")
-    degree_dict = nx.degree_centrality(G)
+    degree_dict = nx.degree(G)
+    in_degree_dict = nx.in_degree_centrality(G)
+    out_degree_dict = nx.out_degree_centrality(G)
     print(f"{datetime.now()} degree end")
-    print(f"{datetime.now()} eigenvector end")
+    print(f"{datetime.now()} eigenvector begin")
     eigenvector_dict = nx.eigenvector_centrality(G, max_iter=1000)
     print(f"{datetime.now()} eigenvector end")
-    print(f"{datetime.now()} closeness begin")
-    # closeness_dict = nx.closeness_centrality(G)
-    print(f"{datetime.now()} closeness end")
     print(f"{datetime.now()} betweenness begin")
     betweenness_dict = nx.betweenness_centrality(G, k=100)
-    # betweenness_dict = calculate_betweenness_centrality(points_list, edges_list)
     print(f"{datetime.now()} betweenness end")
 
     metrics_list = []
-    for node_id in degree_dict:
+    for node_id in in_degree_dict:
         metrics_list.append(
             [
                 node_id,
                 degree_dict[node_id],
+                in_degree_dict[node_id],  # Входящая степень
+                out_degree_dict[node_id],  # Исходящая степень
                 eigenvector_dict[node_id],
-                # closeness_dict[node_id],
-                0.0, #closeness dummy
                 betweenness_dict[node_id]
             ]
         )
 
     print(f"{datetime.now()} calc metrics end")
     return metrics_list
-
-def calc_rev_metrics(points_list, edges_list):
-
-    G = nx.Graph()
-    G.add_nodes_from(points_list)
-    G.add_edges_from(edges_list)
-
-
-    betweenness_dict = nx.betweenness_centrality(G)
-    betweenness_list = [[k, v] for k, v in betweenness_dict.items()]
-
-    return betweenness_list
