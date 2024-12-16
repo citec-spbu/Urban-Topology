@@ -31,13 +31,5 @@ class GraphBase(BaseModel):
     points_csv : str
     ways_properties_csv : str
     points_properties_csv : str
-    reversed_edges_csv : Optional[str] = None 
-    reversed_nodes_csv : Optional[str] = None 
     metrics_csv : str
-    reversed_metrics_csv : Optional[str] = None 
-    # reversed_matrix_csv : str
-
-
-
-    
 
