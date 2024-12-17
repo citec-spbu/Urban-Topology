@@ -1,17 +1,28 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { SearchService } from '../services/search.service';
 import { GraphData } from '../services/graph-data.service';
-import iwanthue from 'iwanthue';
-import Pallete from 'iwanthue/palette';
 import { saveText } from '../graph/saveAsPNG';
 import * as L from 'leaflet';
 import 'leaflet-easyprint';
 
-function getColorBasedOnMetric(value: number): string {
-  value = Math.min(1,value * 4);
-  const red = Math.floor(255 * value);
-  const green = 0;
-  const blue = Math.floor(255 *  (1 - value));
+function getRadiusBasedOnMetric(value: number) {
+  return 1 + 10 * value;
+}
+
+function getColorFromBlueToRed(value: number, maxValue: number, minValue: number): string {
+  if (maxValue === minValue) {
+    // Если все значения одинаковые, возвращаем базовый цвет (например, черный)
+    return `rgb(0, 0, 0)`;
+  }
+
+  // Линейная нормализация значения в диапазоне [0, 1]
+  const normalizedValue = (maxValue - value) / (maxValue - minValue);
+
+  // Интерполяция между синим и красным
+  const red = Math.floor(255 * normalizedValue); // Увеличиваем красный с уменьшением значения
+  const blue = Math.floor(255 * (1 - normalizedValue)); // Увеличиваем синий с увеличением значения
+  const green = 0; // Зелёный отсутствует
+
   return `rgb(${red}, ${green}, ${blue})`;
 }
 
@@ -82,36 +93,36 @@ export class RoadsComponent implements OnInit {
     if(this.graphData) this.updateRoads(this.graphData);
   }
 
-  updateRoads(gd: GraphData){
-    if(!this.map) return;
+  updateRoads(gd: GraphData) {
+    if (!this.map) return;
     this.roads.clearLayers();
-    this.crossroads.clearLayers(); // Очистка слоя перекрестков
+    this.crossroads.clearLayers();
 
     let roads: { [key: string]: L.Polyline } = {};
-    let nodeWayConnections: { [key: string]: Set<string> } = {}; // Узлы и уникальные дороги
+    let nodeWayConnections: { [key: string]: Set<string> } = {};
 
-    // Отрисовка дорог и учет уникальных `way_id` для каждого узла
+    // Вычисляем минимальное и максимальное значение Betweenness Centrality один раз
+    const nodeValues = Object.values(gd.nodes);
+    const maxBetweenness = Math.max(...nodeValues.map(node => Number(node.betweenness_value) || 0));
+    const minBetweenness = Math.min(...nodeValues.map(node => Number(node.betweenness_value) || 0));
+
+    // Отрисовка дорог и учёт уникальных `way_id` для каждого узла
     Object.values(gd.edges).forEach(edge => {
-      // Проверка существования way_id
       if (edge.way_id) {
-        // Учет уникальных дорог для каждого узла
         if (!nodeWayConnections[edge.from]) nodeWayConnections[edge.from] = new Set();
         if (!nodeWayConnections[edge.to]) nodeWayConnections[edge.to] = new Set();
-        nodeWayConnections[edge.from].add(edge.way_id); // Добавляем только если way_id существует
+        nodeWayConnections[edge.from].add(edge.way_id);
         nodeWayConnections[edge.to].add(edge.way_id);
       }
 
       // Отрисовка дорог
       if (edge.way_id) {
         if (!roads[edge.way_id]) {
-          // const road_color = edge.name
-          //   ? iwanthue(1, { seed: edge.name })[0]
-          //   : '#ebebeb';
           const road_color = '#85818c';
           roads[edge.way_id] = L.polyline(
             [
               [gd.nodes[edge.from].lat, gd.nodes[edge.from].lon],
-              [gd.nodes[edge.to].lat, gd.nodes[edge.to].lon]
+              [gd.nodes[edge.to].lat, gd.nodes[edge.to].lon],
             ],
             { color: road_color, weight: 4 }
           )
@@ -125,45 +136,47 @@ export class RoadsComponent implements OnInit {
       }
     });
 
-    // Отрисовка перекрестков: Узлы с более чем одной уникальной дорогой
+    // Отрисовка перекрестков:
     Object.entries(nodeWayConnections).forEach(([nodeId, wayIds]) => {
-      if (wayIds.size > 1) { // Если узел связан с двумя и более дорогами
+      if (wayIds.size > 1) {
         const node = gd.nodes[nodeId];
         if (node) {
-          // Собираем названия дорог и их идентификаторы
           const roadNames: string[] = [];
           const roadIds: string[] = [];
 
           wayIds.forEach((wayId) => {
             const edge = Object.values(gd.edges).find(e => e.way_id === wayId);
             if (edge) {
-              roadIds.push(wayId); // Добавляем идентификатор
-              roadNames.push(edge.name || 'Неизвестная дорога'); // Добавляем имя дороги
+              roadIds.push(wayId);
+              roadNames.push(edge.name || 'Неизвестная дорога');
             }
           });
+  
+          const betweenness = Number(node.betweenness_value) || 0;
+  
+          const options = {
+            radius: getRadiusBasedOnMetric(betweenness / maxBetweenness),
+            color: getColorFromBlueToRed(betweenness, minBetweenness, maxBetweenness),
+            fillColor: getColorFromBlueToRed(betweenness, minBetweenness, maxBetweenness),
+            fillOpacity: 0.8,
+          };
 
           // Формируем popup с информацией о перекрестке
           const popupContent = `
-        <b>Перекресток:</b><br>
-        Значение Degree вершины: ${node.degree_value}<br>
-        Значение In-Degree Centrality: ${node.in_degree_value}<br>
-        Значение Out-Degree Centrality: ${node.out_degree_value}<br>
-        Значение Eigenvector Centrality: ${node.eigenvector_value}<br>
-        Значение Betweenness Centrality: ${node.betweenness_value}<br>
-        Идентификатор: ${nodeId}<br>
-        Уникальных дорог: ${wayIds.size}<br>
-        <b>Дороги:</b><br>
-        ${roadNames.map((name, index) => `${name} (ID: ${roadIds[index]})`).join('<br>')}
-      `;
+            <b>Перекресток:</b><br>
+            Значение Degree вершины: ${node.degree_value}<br>
+            Значение In-Degree Centrality: ${node.in_degree_value}<br>
+            Значение Out-Degree Centrality: ${node.out_degree_value}<br>
+            Значение Eigenvector Centrality: ${node.eigenvector_value}<br>
+            Значение Betweenness Centrality: ${node.betweenness_value}<br>
+            Идентификатор: ${nodeId}<br>
+            Уникальных дорог: ${wayIds.size}<br>
+            <b>Дороги:</b><br>
+            ${roadNames.map((name, index) => `${name} (ID: ${roadIds[index]})`).join('<br>')}
+          `;
 
           // Добавляем перекресток на карту
-          L.circleMarker([node.lat, node.lon], {
-            radius: (1 + 50*Number(node.betweenness_value)),
-            // radius: Math.exp(40*Number(node.betweenness_value))/70,
-            color: getColorBasedOnMetric(Number(node.betweenness_value)), // Красный цвет для перекрестков
-            fillColor: getColorBasedOnMetric(Number(node.betweenness_value)),
-            fillOpacity: 0.8
-          })
+          L.circleMarker([node.lat, node.lon], options)
             .bindPopup(popupContent)
             .addTo(this.crossroads);
         }
@@ -172,6 +185,7 @@ export class RoadsComponent implements OnInit {
 
     this.map.fitBounds(this.roads.getBounds());
   }
+  
 
   setTools(map: L.Map){
     const exportMap = ExportMap(() => {
