@@ -101,10 +101,16 @@ export class RoadsComponent implements OnInit {
     let roads: { [key: string]: L.Polyline } = {};
     let nodeWayConnections: { [key: string]: Set<string> } = {};
 
-    // Вычисляем минимальное и максимальное значение Betweenness Centrality один раз
     const nodeValues = Object.values(gd.nodes);
-    const maxBetweenness = Math.max(...nodeValues.map(node => Number(node.betweenness_value) || 0));
-    const minBetweenness = Math.min(...nodeValues.map(node => Number(node.betweenness_value) || 0));
+    const maxBetweenness = nodeValues.reduce(
+      (max, node) => Math.max(max, Number(node.betweenness_value) || 0),
+      0
+    );
+    const minBetweenness = nodeValues.reduce(
+      (min, node) => Math.min(min, Number(node.betweenness_value) || 0),
+      Infinity
+    );
+    
     const adjustedMaxBetweenness = maxBetweenness === 0 ? 1 : maxBetweenness;
 
     // Отрисовка дорог и учёт уникальных `way_id` для каждого узла
