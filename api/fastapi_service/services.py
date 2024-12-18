@@ -70,7 +70,7 @@ def graph_to_scheme(points, edges, pprop, wprop, metrics) -> GraphBase:
     points_str, _ = list_to_csv_str(points, ['id', 'longitude', 'latitude'])
     pprop_str, _ = list_to_csv_str(pprop, ['id', 'property', 'value'])
     wprop_str, _ = list_to_csv_str(wprop, ['id', 'property', 'value'])
-    metrics_str, _ = list_to_csv_str(metrics, ['id', 'degree', 'in_degree', 'out_degree', 'eigenvector', 'betweenness'])
+    metrics_str, _ = list_to_csv_str(metrics, ['id', 'degree', 'in_degree', 'out_degree', 'eigenvector', 'betweenness', 'radius', 'color'])
 
     return GraphBase(edges_csv=edges_str, points_csv=points_str, 
                      ways_properties_csv=wprop_str, points_properties_csv=pprop_str,
@@ -677,9 +677,9 @@ async def calc_metrics(points, edges, oneway_ids):
     points_list = [point[0] for point in points]
     edges_list = [(edge[2], edge[3]) for edge in edges]  # Ориентированные ребра
     reversed_edges_list = [(edge[3], edge[2]) for edge in edges if edge[1] not in oneway_ids]  # Обратные ребра для двусторонних дорог
+    
     print(f"{datetime.now()} calc metrics begin")
     print(f"{datetime.now()} graph building begin")
-
     G = nx.DiGraph()  # Ориентированный граф
     G.add_nodes_from(points_list)
     G.add_edges_from(edges_list)  # Добавляем основные направления
@@ -691,15 +691,29 @@ async def calc_metrics(points, edges, oneway_ids):
     in_degree_dict = nx.in_degree_centrality(G)
     out_degree_dict = nx.out_degree_centrality(G)
     print(f"{datetime.now()} degree end")
+    
     print(f"{datetime.now()} eigenvector begin")
     eigenvector_dict = nx.eigenvector_centrality(G, max_iter=1000)
     print(f"{datetime.now()} eigenvector end")
+    
     print(f"{datetime.now()} betweenness begin")
     betweenness_dict = nx.betweenness_centrality(G, k=100)
     print(f"{datetime.now()} betweenness end")
+    
+    betweenness_values = betweenness_dict.values()
+
+    max_betweenness = max(betweenness_values)
+    min_betweenness = min(betweenness_values)
+
+    adjusted_max_betweenness = 1 if max_betweenness == 0 else max_betweenness
 
     metrics_list = []
     for node_id in in_degree_dict:
+        node_betweenness = betweenness_dict[node_id]
+        normalized_betweenness = node_betweenness / adjusted_max_betweenness
+        radius = get_radius_based_on_metric(normalized_betweenness)
+        color = get_color_from_blue_to_red(node_betweenness, min_betweenness, max_betweenness)
+
         metrics_list.append(
             [
                 node_id,
@@ -707,9 +721,41 @@ async def calc_metrics(points, edges, oneway_ids):
                 in_degree_dict[node_id],  # Входящая степень
                 out_degree_dict[node_id],  # Исходящая степень
                 eigenvector_dict[node_id],
-                betweenness_dict[node_id]
+                node_betweenness,
+                radius,
+                color                
             ]
         )
-
     print(f"{datetime.now()} calc metrics end")
+    
     return metrics_list
+
+def get_radius_based_on_metric(value: float) -> float:
+    """
+    Возвращает радиус, основанный на значении метрики.
+    """
+    return 1 + 10 * value
+
+
+def get_color_from_blue_to_red(value: float, min_value: float, max_value: float) -> str:
+    """
+    Возвращает цвет от синего к красному на основе значения в диапазоне.
+    
+    :param value: Текущее значение метрики
+    :param min_value: Минимальное значение метрики
+    :param max_value: Максимальное значение метрики
+    :return: Цвет в формате 'rgb(r, g, b)'
+    """
+    if max_value == min_value:
+        # Если все значения одинаковые, возвращаем базовый цвет (например, черный)
+        return "rgb(0, 0, 0)"
+    
+    # Линейная нормализация значения в диапазоне [0, 1]
+    normalized_value = (value - min_value) / (max_value - min_value)
+    
+    # Интерполяция между синим и красным
+    red = int(255 * normalized_value)  # Увеличиваем красный с увеличением значения
+    green = 0  # Зеленый отсутствует
+    blue = int(255 * (1 - normalized_value))  # Уменьшаем синий с увеличением значения
+
+    return f"rgb({red}, {green}, {blue})"

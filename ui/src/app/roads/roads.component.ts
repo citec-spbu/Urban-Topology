@@ -5,29 +5,6 @@ import { saveText } from '../graph/saveAsPNG';
 import * as L from 'leaflet';
 import 'leaflet-easyprint';
 
-function getRadiusBasedOnMetric(value: number) {
-  return 1 + 10 * value;
-}
-
-function getColorFromBlueToRed(value: number, minValue: number, maxValue: number): string {
-  if (maxValue === minValue) {
-    // Если все значения одинаковые, возвращаем базовый цвет (например, черный)
-    return `rgb(0, 0, 0)`;
-  }
-  
-  // Линейная нормализация значения в диапазоне [0, 1]
-  const normalizedValue = (value - minValue) / (maxValue - minValue);
-
-  // Интерполяция между синим и красным
-  const red = Math.floor(255 * normalizedValue); // Увеличиваем красный с увеличением значения
-  const blue = Math.floor(255 * (1 - normalizedValue)); // Уменьшаем синий с увеличением значения
-  const green = 0; // Зелёный отсутствует
-
-  return `rgb(${red}, ${green}, ${blue})`;
-}
-
-
-
 @Component({
   selector: 'app-roads',
   templateUrl: './roads.component.html',
@@ -100,19 +77,7 @@ export class RoadsComponent implements OnInit {
 
     let roads: { [key: string]: L.Polyline } = {};
     let nodeWayConnections: { [key: string]: Set<string> } = {};
-
-    const nodeValues = Object.values(gd.nodes);
-    const maxBetweenness = nodeValues.reduce(
-      (max, node) => Math.max(max, Number(node.betweenness_value) || 0),
-      0
-    );
-    const minBetweenness = nodeValues.reduce(
-      (min, node) => Math.min(min, Number(node.betweenness_value) || 0),
-      Infinity
-    );
-    
-    const adjustedMaxBetweenness = maxBetweenness === 0 ? 1 : maxBetweenness;
-
+   
     // Отрисовка дорог и учёт уникальных `way_id` для каждого узла
     Object.values(gd.edges).forEach(edge => {
       if (edge.way_id) {
@@ -158,14 +123,11 @@ export class RoadsComponent implements OnInit {
               roadNames.push(edge.name || 'Неизвестная дорога');
             }
           });
-  
-          const betweenness = Number(node.betweenness_value) || 0;
-          const normalizedBetweenness = adjustedMaxBetweenness === 0 ? 0 : betweenness / adjustedMaxBetweenness;
 
           const options = {
-            radius: getRadiusBasedOnMetric(normalizedBetweenness),
-            color: getColorFromBlueToRed(betweenness, minBetweenness, maxBetweenness),
-            fillColor: getColorFromBlueToRed(betweenness, minBetweenness, maxBetweenness),
+            radius: Number(node.radius_value),
+            color: node.color_value,
+            fillColor: node.color_value,
             fillOpacity: 0.8,
           };
 

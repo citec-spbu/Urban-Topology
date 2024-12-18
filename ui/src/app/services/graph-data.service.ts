@@ -19,7 +19,9 @@ export interface INode{
     in_degree_value?: string,
     out_degree_value?: string,
     eigenvector_value?: string,
-    betweenness_value?: string
+    betweenness_value?: string,
+    radius_value?: string,
+    color_value?: string
 }
 
 export interface GraphData{
@@ -36,8 +38,10 @@ export interface Metric{
     degree: string,
     in_degree: string,
     out_degree: string,
-    eigenvector: string
-    betweenness: string
+    eigenvector: string,
+    betweenness: string,
+    radius: string,
+    color: string
   }
 
 @Injectable({providedIn: 'root'})
