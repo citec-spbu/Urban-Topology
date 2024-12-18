@@ -101,7 +101,7 @@ async def city_regions(
 async def city_graph(
     city_id: int,
     regions_ids: List[int],
-    use_cache: bool = True
+    use_cache: bool = False
 ):
     request = f"GET /api/cities/graph/?city_id={city_id}&regions={regions_ids}"
     status_code = 200
