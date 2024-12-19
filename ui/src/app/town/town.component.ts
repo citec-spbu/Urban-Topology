@@ -138,7 +138,8 @@ export class TownComponent implements OnInit, OnDestroy {
   }
 
   getRgraph(nodesStr: string, edgesStr: string, metricsStr: string): void {
-    const metrics = this.parseMetrics(this.parseCSV(metricsStr));
+    const parsedMetrics = this.parseCSV(metricsStr)
+    const metrics = this.parseMetrics(parsedMetrics);
     const nodes = this.parseNodes(this.parseCSV(nodesStr), metrics);
     const edges = this.parseEdges(this.parseCSV(edgesStr));
     this.RgraphData = { nodes, edges } as GraphData;
@@ -147,12 +148,28 @@ export class TownComponent implements OnInit, OnDestroy {
   private parseCSV = (csvStr: string, header: boolean = true): string[][] => {
     const lines = csvStr.split('\n');
     const data = header ? lines.slice(1) : lines;
-    return data.map(line => line.split(',')).filter(row => row[0]);
-  };
+  
+    return data.map(line => {
+
+      // Разбиваем строку на столбцы
+      const columns = line.split(',').slice(0, 7);
+  
+      // Извлекаем 7-й столбец (цвет)
+      let colorParts = line.split(',').slice(7).join(',');
+  
+      // Удаляем лишние кавычки вокруг цвета
+      colorParts = colorParts.replace(/^"|"$/g, '').trim(); 
+  
+      // Создаем новый массив с цветом в последнем столбце
+      const result = [...columns, colorParts];
+  
+      return result;
+    }).filter(row => row[0]); // Фильтруем пустые строки
+  };  
 
   private parseMetrics = (metricsData: string[][]): { [key: number]: Metric } => {
     const metrics: { [key: number]: Metric } = {};
-    metricsData.forEach(([id, degree, in_degree, out_degree, eigenvector, betweenness]) => {
+    metricsData.forEach(([id, degree, in_degree, out_degree, eigenvector, betweenness, radius, color]) => {
       metrics[Number(id)] = {
         id: id,
         degree: degree,
@@ -160,6 +177,8 @@ export class TownComponent implements OnInit, OnDestroy {
         out_degree: out_degree,
         eigenvector: eigenvector,
         betweenness: betweenness,
+        radius: radius,
+        color: color
       };
     });
     return metrics;
@@ -178,6 +197,8 @@ export class TownComponent implements OnInit, OnDestroy {
         out_degree_value: metric.out_degree,
         eigenvector_value: metric.eigenvector,
         betweenness_value: metric.betweenness,
+        radius_value: metric.radius,
+        color_value: metric.color
       };
     });
     return nodes;
