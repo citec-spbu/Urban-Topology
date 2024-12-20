@@ -107,6 +107,8 @@ async def city_graph(
     status_code = 200
     detail = "OK"
 
+    os.makedirs("./data/caches", exist_ok=True)
+
     cache_response_file_path = f"./data/caches/{city_id}_{regions_ids}.json"
     if use_cache and os.path.exists(cache_response_file_path):
         with open(cache_response_file_path, 'r') as f:
