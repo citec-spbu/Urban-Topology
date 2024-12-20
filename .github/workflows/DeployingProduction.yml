@@ -26,6 +26,12 @@ jobs:
           command_timeout: 30m
           script: |
             cd ${{ github.event.repository.name }}
+            
+            # Новый шаг: сброс локальных изменений
+            git reset --hard
+            git clean -fd
+            
+            # Выполнение pull после очистки
             git pull https://${{ secrets.PUNKER_GITHUB_USERNAME }}:${{ secrets.PUNKER_ACCESS_TOKEN }}@github.com/${{ github.repository }}.git main
             
             rm .env
