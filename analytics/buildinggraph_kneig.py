@@ -8,7 +8,7 @@ import shapely
 def check_validity(place_name):
     try:
         tags = {"building": True}
-        g = ox.features_from_place(city, tags)
+        g = ox.features_from_place(place_name, tags)
         return True, g
     except Exception as e:
         return False, str(e)
