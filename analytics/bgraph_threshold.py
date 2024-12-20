@@ -14,9 +14,8 @@ def check_validity(place_name):
         return False, str(e)
 
 
-# city = input("Введите название города: ")
+city = input("Введите название города: ")
 plot_type = 3
-city = "Рощино, Приморский край"
 is_valid, gdf = check_validity(city)
 if is_valid:
     gdf = gdf[['geometry']]
