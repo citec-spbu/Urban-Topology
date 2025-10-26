@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import {HttpClient, HttpHeaders} from '@angular/common/http'
 import { Region, Town } from '../interfaces/town';
 import { Observable, of, throwError } from 'rxjs';
-import { host } from 'src/environments/environment';
+import { environment } from 'src/environments/environment';
 
 
 export interface csv_result{
@@ -33,36 +33,36 @@ export class TownService {
 
   getTowns(page: number = 1, per_page: number = 9): Observable<Town[]>{ //Observable - класс (из rxjs). Можно подписаться на изменение данных (.subscribe(func1, func2, func3)). (func1 - обработчик следующего значения, func2 - обработка ошибок, func3 - при завершении подачи данных) Нужен для ассинхронного изменения данных.
     
-    return this.http.get<Town[]>(`${host}/cities/?page=${page}&per_page=${per_page}`, this.getHttpOptions());
+    return this.http.get<Town[]>(`${environment.apiUrl}/cities/?page=${page}&per_page=${per_page}`, this.getHttpOptions());
     // return of(towns)
   }
 
   getTown(id: string): Observable<Town>{
     
-    return this.http.get<Town>(`${host}/city/?city_id=${id}`, this.getHttpOptions());
+    return this.http.get<Town>(`${environment.apiUrl}/city/?city_id=${id}`, this.getHttpOptions());
   }
 
   // downloadTown(id: string, extension: number = 0): Observable<Town>{
     
-  //   return this.http.get<Town>(`${host}/download/city/?city_id=${id}&extension=${extension}`, this.getHttpOptions());
+  //   return this.http.get<Town>(`${environment.apiUrl}/download/city/?city_id=${id}&extension=${extension}`, this.getHttpOptions());
   // }
 
   // deleteTown(id: string): Observable<Town>{
     
-  //   return this.http.get<Town>(`${host}/delete/city/?city_id=${id}`, this.getHttpOptions());
+  //   return this.http.get<Town>(`${environment.apiUrl}/delete/city/?city_id=${id}`, this.getHttpOptions());
   // }
 
   getTownRegions(id: number): Observable<Region[]>{
     
-    return this.http.get<Region[]>(`${host}/regions/city/?city_id=${id}`, this.getHttpOptions());
+    return this.http.get<Region[]>(`${environment.apiUrl}/regions/city/?city_id=${id}`, this.getHttpOptions());
   }
 
   getGraphFromBbox(id: number, nodes: [number, number][]){
-    return this.http.post<csv_result>(`${host}/city/graph/bbox/${id}`, [nodes], this.getHttpOptions());
+    return this.http.post<csv_result>(`${environment.apiUrl}/city/graph/bbox/${id}`, [nodes], this.getHttpOptions());
   }
   getGraphFromId(id: number, regionId: number){
     const body = [regionId];
-    return this.http.post<csv_result>(`${host}/city/graph/region/?city_id=${id}`, body, this.getHttpOptions());
+    return this.http.post<csv_result>(`${environment.apiUrl}/city/graph/region/?city_id=${id}`, body, this.getHttpOptions());
   }
 }
 

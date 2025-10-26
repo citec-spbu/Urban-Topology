@@ -1,4 +1,5 @@
-# version: '3.7'
+# Production Docker Compose Configuration
+# Usage: docker-compose -f docker-compose.prod.yaml up -d
 
 services:
   postgres:
@@ -13,6 +14,7 @@ services:
       - "54321:5432"
     networks:
       - network
+    restart: unless-stopped
 
   webserver:
     build:
@@ -27,12 +29,9 @@ services:
         source: logsvol
         target: /app/logs
       - type: bind
-        source: ./api/fastapi_service #delete in prod and add copy
-        target: /app/fastapi_service
-      - type: bind
         source: ./api/cities_osm
         target: /app/fastapi_service/data/cities_osm
-    restart: always
+    restart: unless-stopped
     depends_on:
       - postgres
     ports:
@@ -43,14 +42,19 @@ services:
   frontend:
     build:
       context: ui/
-      dockerfile: Dockerfile.dev
-    image: ts_service    
+      dockerfile: Dockerfile
+      args:
+        # Override this with your production API URL
+        # Example: docker-compose build --build-arg API_URL=https://api.example.com/api frontend
+        API_URL: ${API_URL:-http://158.160.17.229:8901/api}
+    image: ts_service_prod
     depends_on:
       - webserver
     ports:
-      - "4200:4200"
+      - "80:80"
     networks:
       - network
+    restart: unless-stopped
 
 volumes:     
   pgdata:
