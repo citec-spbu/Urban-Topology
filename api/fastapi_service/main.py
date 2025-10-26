@@ -139,7 +139,7 @@ async def city_regions(city_id: int):
 @app.post("/api/city/graph/region/", response_model=GraphBase)
 @logger.catch(exclude=HTTPException)
 async def city_graph(city_id: int, regions_ids: List[int], use_cache: bool = True):
-    request = f"GET /api/cities/graph/?city_id={city_id}&regions={regions_ids}"
+    request = f"POST /api/city/graph/region/?city_id={city_id}&regions={regions_ids}"
     status_code = 200
     detail = "OK"
 
