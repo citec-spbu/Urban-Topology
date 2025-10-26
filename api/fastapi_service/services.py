@@ -13,6 +13,7 @@ from osm_handler import parse_osm
 from typing import List, Iterable, Union, TYPE_CHECKING
 from sqlalchemy import update, text
 from datetime import datetime
+import subprocess
 
 import pandas as pd
 import osmnx as ox
@@ -165,13 +166,21 @@ def add_info_to_db(city_df: DataFrame):
 
 
 def add_graph_to_db(city_id: int, file_path: str, city_name: str) -> None:
+    conn = None
     try:
         conn = engine.connect()
-        # with open("/osmosis/script/pgsimple_schema_0.6.sql", "r") as f:
-        #     query = text(f.read())
-        #     conn.execute(query) -U user -d fastapi_database
-        command = f"psql {DATABASE_URL} -f /osmosis/script/pgsimple_schema_0.6.sql"
-        res = os.system(command)
+
+        # Execute psql schema initialization using subprocess
+        try:
+            result = subprocess.run(
+                ["psql", DATABASE_URL, "-f", "/osmosis/script/pgsimple_schema_0.6.sql"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error initializing database schema: {e.stderr}")
+            raise
 
         required_road_types = (
             "motorway",
@@ -190,12 +199,54 @@ def add_graph_to_db(city_id: int, file_path: str, city_name: str) -> None:
         )  # , 'residential','living_street'
 
         road_file_path = file_path[:-8] + "_highway.pbf"
-        command = f"""/osmosis/bin/osmosis --read-pbf-fast file="{file_path}" --tf accept-ways highway={",".join(required_road_types)} \
-                          --tf reject-ways side_road=yes --used-node --write-pbf omitmetadata=true file="{road_file_path}" \
-                          && /osmosis/bin/osmosis --read-pbf-fast file="{road_file_path}" --write-pgsimp authFile="{AUTH_FILE_PATH}" \
-                          && rm "{road_file_path}"
-                       """
-        res = os.system(command)
+
+        # Step 1: Filter OSM data to highways only
+        try:
+            subprocess.run(
+                [
+                    "/osmosis/bin/osmosis",
+                    "--read-pbf-fast",
+                    f"file={file_path}",
+                    "--tf",
+                    "accept-ways",
+                    f"highway={','.join(required_road_types)}",
+                    "--tf",
+                    "reject-ways",
+                    "side_road=yes",
+                    "--used-node",
+                    "--write-pbf",
+                    "omitmetadata=true",
+                    f"file={road_file_path}",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error filtering OSM data: {e.stderr}")
+            raise
+
+        # Step 2: Import filtered data to PostgreSQL
+        try:
+            subprocess.run(
+                [
+                    "/osmosis/bin/osmosis",
+                    "--read-pbf-fast",
+                    f"file={road_file_path}",
+                    "--write-pgsimp",
+                    f"authFile={AUTH_FILE_PATH}",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error importing to PostgreSQL: {e.stderr}")
+            raise
+        finally:
+            # Clean up temporary file
+            if os.path.exists(road_file_path):
+                os.remove(road_file_path)
 
         # Вставка в Ways
         query = text(
@@ -346,10 +397,11 @@ def add_graph_to_db(city_id: int, file_path: str, city_name: str) -> None:
             .values(downloaded=True)
         )
         conn.execute(query)
-
-        conn.close()
     except Exception:
         print(f"Can't download {city_name} with id {city_id}")
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def add_point_to_db(df: DataFrame) -> int:
