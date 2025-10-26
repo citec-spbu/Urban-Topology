@@ -173,14 +173,20 @@ async def city_graph(city_id: int, regions_ids: List[int], use_cache: bool = Tru
 
         graphBase = services.graph_to_scheme(points, edges, pprop, wprop, metrics)
 
-        with open(cache_response_file_path, "w+") as f:
-            # Support both Pydantic v1 and v2: prefer model_dump() (v2), fallback to dict() (v1)
-            data = (
-                graphBase.model_dump()
-                if hasattr(graphBase, "model_dump")
-                else graphBase.dict()
-            )
-            json.dump(data, f)
+        # Support both Pydantic v1 and v2: prefer model_dump() (v2), fallback to dict() (v1)
+        data = (
+            graphBase.model_dump()
+            if hasattr(graphBase, "model_dump")
+            else graphBase.dict()
+        )
+        import tempfile
+        dirpath = os.path.dirname(cache_response_file_path)
+        with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False) as tmp:
+            json.dump(data, tmp)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_name = tmp.name
+        os.replace(tmp_name, cache_response_file_path)
 
         logger.info(f"{request} {status_code} {detail}")
         return graphBase
