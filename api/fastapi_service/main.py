@@ -5,6 +5,8 @@ from uvicorn import run
 from os import getenv
 from schemas import CityBase, RegionBase, GraphBase
 from database import database, engine, metadata
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 import pandas as pd
 import geopandas as gpd
@@ -14,9 +16,55 @@ import json
 import os
 from datetime import datetime
 
-regions_df = gpd.read_file("./data/regions.json", driver="GeoJSON")
-cities_info = pd.read_csv("./data/cities.csv")
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup - Load data files
+    data_dir = Path(os.environ.get("DATA_DIR", "./data"))
+
+    # Load regions GeoJSON
+    regions_file = data_dir / "regions.json"
+    if not regions_file.exists():
+        error_msg = f"Required data file not found: {regions_file.absolute()}"
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    try:
+        app.state.regions_df = gpd.read_file(regions_file)
+        logger.info(f"Loaded regions data from {regions_file}")
+    except Exception as e:
+        error_msg = f"Failed to load regions data from {regions_file}: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
+
+    # Load cities CSV
+    cities_file = data_dir / "cities.csv"
+    if not cities_file.exists():
+        error_msg = f"Required data file not found: {cities_file.absolute()}"
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    try:
+        app.state.cities_info = pd.read_csv(cities_file)
+        logger.info(f"Loaded cities data from {cities_file}")
+    except Exception as e:
+        error_msg = f"Failed to load cities data from {cities_file}: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
+
+    # Connect to database
+    await database.connect()
+    services.init_db(cities_info=app.state.cities_info)
+    logger.info("Database connected and initialized")
+
+    yield
+
+    # Shutdown
+    await database.disconnect()
+    logger.info("Database disconnected")
+
+
+app = FastAPI(lifespan=lifespan)
 logger = logs.init()
 
 app.add_middleware(
@@ -30,17 +78,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def startup():
-    await database.connect()
-    services.init_db(cities_info=cities_info)
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await database.disconnect()
 
 
 if __name__ == "__main__":
@@ -87,7 +124,7 @@ async def city_regions(city_id: int):
     detail = "OK"
 
     regions = services.get_regions(
-        city_id=city_id, regions=regions_df, cities=cities_info
+        city_id=city_id, regions=app.state.regions_df, cities=app.state.cities_info
     )
     if regions is None:
         status_code = 404
@@ -116,7 +153,7 @@ async def city_graph(city_id: int, regions_ids: List[int], use_cache: bool = Tru
 
         print(f"{datetime.now()} graph_from_ids begin")
         points, edges, pprop, wprop, metrics = await services.graph_from_ids(
-            city_id=city_id, regions_ids=regions_ids, regions=regions_df
+            city_id=city_id, regions_ids=regions_ids, regions=app.state.regions_df
         )
         print(f"{datetime.now()} graph_from_ids end")
 
