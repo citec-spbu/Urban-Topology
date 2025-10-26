@@ -1,4 +1,4 @@
-from database import engine, Base, SessionLocal, database, DATABASE_URL
+from database import engine, SessionLocal, database, DATABASE_URL
 from models import City, CityProperty, Point
 from shapely.geometry.point import Point as ShapelyPoint
 from database import *
@@ -9,20 +9,17 @@ from shapely.geometry.polygon import Polygon
 from shapely.ops import unary_union
 from geopandas.geodataframe import GeoDataFrame
 from pandas.core.frame import DataFrame
-from osm_handler import parse_osm
 from typing import List, Iterable, Union, TYPE_CHECKING
 from sqlalchemy import update, text
 from datetime import datetime
 import subprocess
 
 import pandas as pd
-import osmnx as ox
 import os.path
+import os
 import ast
 import io
 import pandas as pd
-import networkx as nx
-import time
 import networkx as nx
 import logging
 
