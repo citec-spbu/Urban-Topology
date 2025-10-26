@@ -525,7 +525,7 @@ async def graph_from_poly(city_id, polygon):
     q = CityAsync.select().where(CityAsync.c.id == city_id)
     city = await database.fetch_one(q)
     if city is None or not city.downloaded:
-        return None, None, None, None
+        return None, None, None, None, None
 
     print(f"{datetime.now()} q1 begin")
     query = text(
