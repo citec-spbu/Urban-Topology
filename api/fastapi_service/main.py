@@ -1,6 +1,6 @@
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from uvicorn import run
 from os import getenv
 from schemas import CityBase, RegionBase, GraphBase
@@ -138,8 +138,10 @@ async def city_regions(city_id: int):
 
 @app.post("/api/city/graph/region/", response_model=GraphBase)
 @logger.catch(exclude=HTTPException)
-async def city_graph(city_id: int, regions_ids: List[int], use_cache: bool = True):
-    request = f"POST /api/city/graph/region/?city_id={city_id}&regions={regions_ids}"
+async def city_graph(
+    city_id: int, regions_ids: List[int] = Body(...), use_cache: bool = True
+):
+    request = f"POST /api/city/graph/region/?city_id={city_id} regions_ids={regions_ids} (body)"
     status_code = 200
     detail = "OK"
 
@@ -180,6 +182,7 @@ async def city_graph(city_id: int, regions_ids: List[int], use_cache: bool = Tru
             else graphBase.dict()
         )
         import tempfile
+
         dirpath = os.path.dirname(cache_response_file_path)
         with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False) as tmp:
             json.dump(data, tmp)
