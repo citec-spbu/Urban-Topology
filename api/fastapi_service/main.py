@@ -106,29 +106,52 @@ async def city_graph(city_id: int, regions_ids: List[int], use_cache: bool = Tru
     status_code = 200
     detail = "OK"
 
-    os.makedirs("./data/caches", exist_ok=True)
+    try:
+        os.makedirs("./data/caches", exist_ok=True)
 
-    cache_response_file_path = f"./data/caches/{city_id}_{regions_ids}.json"
-    if use_cache and os.path.exists(cache_response_file_path):
-        with open(cache_response_file_path, 'r') as f:
-            return json.load(f)
+        cache_response_file_path = f"./data/caches/{city_id}_{regions_ids}.json"
+        if use_cache and os.path.exists(cache_response_file_path):
+            with open(cache_response_file_path, "r") as f:
+                return json.load(f)
 
-    print(f"{datetime.now()} graph_from_ids begin")
-    points, edges, pprop, wprop, metrics  = await services.graph_from_ids(city_id=city_id, regions_ids=regions_ids, regions=regions_df)
-    print(f"{datetime.now()} graph_from_ids end")
-    if points is None:
-        status_code = 404
-        detail = "NOT FOUND"
-        logger.error(f"{request} {status_code} {detail}")
-        raise HTTPException(status_code=status_code, detail=detail)
+        print(f"{datetime.now()} graph_from_ids begin")
+        points, edges, pprop, wprop, metrics = await services.graph_from_ids(
+            city_id=city_id, regions_ids=regions_ids, regions=regions_df
+        )
+        print(f"{datetime.now()} graph_from_ids end")
 
-    graphBase = services.graph_to_scheme(points, edges, pprop, wprop, metrics)
+        if points is None:
+            status_code = 404
+            detail = f"Region not found or city {city_id} not downloaded. Requested regions: {regions_ids}"
+            logger.error(f"{request} {status_code} {detail}")
+            raise HTTPException(status_code=status_code, detail=detail)
 
-    with open (cache_response_file_path, "w+") as f:
-        json.dump(graphBase.model_dump(), f)
+        # Check if graph is empty
+        if len(points) == 0 or len(edges) == 0:
+            status_code = 422
+            detail = f"No road network data found for region(s) {regions_ids} in city {city_id}. The data for this region has not been downloaded from OSM yet. Please ensure the region data is downloaded before requesting the graph."
+            logger.error(f"{request} {status_code} {detail}")
+            raise HTTPException(status_code=status_code, detail=detail)
 
-    logger.info(f"{request} {status_code} {detail}")
-    return graphBase
+        graphBase = services.graph_to_scheme(points, edges, pprop, wprop, metrics)
+
+        with open(cache_response_file_path, "w+") as f:
+            json.dump(graphBase.model_dump(), f)
+
+        logger.info(f"{request} {status_code} {detail}")
+        return graphBase
+
+    except HTTPException:
+        # Re-raise HTTP exceptions without modification
+        raise
+    except Exception as e:
+        # Catch any other unexpected errors and provide detailed error message
+        status_code = 500
+        error_type = type(e).__name__
+        error_msg = str(e)
+        detail = f"Internal server error processing graph for city {city_id}, regions {regions_ids}. Error: {error_type}: {error_msg}"
+        logger.exception(f"{request} {status_code} {detail}")
+        raise HTTPException(status_code=status_code, detail=detail) from e
 
 
 @app.post("/api/city/graph/bbox/{city_id}/", response_model=GraphBase)
