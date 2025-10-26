@@ -33,6 +33,7 @@ export class TownComponent implements OnInit, OnDestroy {
   graphName = '';
   // roadBounds?: L.LatLngBounds;
   loading: boolean = false;
+  errorMessage: string = '';
 
   private _section: sections = sections.map;
   set section(val: sections | string) {
@@ -100,11 +101,15 @@ export class TownComponent implements OnInit, OnDestroy {
     delete this.pointPropsCsv;
     delete this.metrics;
     delete this.RgraphData;
+    this.errorMessage = ''; // Clear any previous error message
 
     if (ev.regionId) {
       this.loading = true;
       this.cdRef.detectChanges();
-      this.townService.getGraphFromId(this.id, ev.regionId).subscribe(this.graphSubscriber)
+      this.townService.getGraphFromId(this.id, ev.regionId).subscribe(
+        this.graphSubscriber,
+        this.graphErrorHandler
+      );
       return;
     }
     if (ev.polygon) {
@@ -112,7 +117,10 @@ export class TownComponent implements OnInit, OnDestroy {
       const body: [number, number][] = nodes.map(node => [node.lng, node.lat]);
       this.loading = true;
       this.cdRef.detectChanges();
-      this.townService.getGraphFromBbox(this.id, body).subscribe(this.graphSubscriber);
+      this.townService.getGraphFromBbox(this.id, body).subscribe(
+        this.graphSubscriber,
+        this.graphErrorHandler
+      );
       return;
     }
   }
@@ -125,6 +133,67 @@ export class TownComponent implements OnInit, OnDestroy {
     this.getRgraph(res.points_csv, res.edges_csv, res.metrics_csv);
     this.loading = false;
     this.section = sections.roads;
+    this.cdRef.detectChanges();
+  }
+
+  graphErrorHandler = (error: any) => {
+    console.error('Error loading graph:', error);
+    this.loading = false;
+
+    // Normalize status to a number for safe comparisons
+    const statusRaw = error?.status;
+    const statusNum = typeof statusRaw === 'number' 
+      ? statusRaw 
+      : (typeof statusRaw === 'string' ? parseInt(statusRaw, 10) : NaN);
+    const status = isNaN(statusNum) ? 0 : statusNum;
+
+    let errorDetails = '';
+
+    // Try to extract detailed error message
+    if (error?.error) {
+      if (typeof error.error === 'string') {
+        errorDetails = error.error;
+      } else if (error.error?.detail) {
+        if (typeof error.error.detail === 'string') {
+          errorDetails = error.error.detail;
+        } else if (Array.isArray(error.error.detail)) {
+          errorDetails = error.error.detail
+            .map((err: any) => {
+              const field = err.loc ? err.loc.join(' → ') : 'unknown';
+              return `${field}: ${err.msg}`;
+            })
+            .join('; ');
+        }
+      } else if (error.error?.message) {
+        errorDetails = error.error.message;
+      }
+    } else if (error?.message) {
+      errorDetails = error.message;
+    }
+
+    let userMessage = 'Ошибка загрузки графа. ';
+
+    if (status === 404) {
+      userMessage += 'Регион не найден или данные города не загружены. ';
+    } else if (status === 422) {
+      userMessage += 'Данные дорожной сети для этого региона отсутствуют. ';
+    } else if (status === 500) {
+      userMessage += 'Внутренняя ошибка сервера. ';
+    } else if (status >= 400 && status < 500) {
+      userMessage += 'Неверный запрос. ';
+    } else if (status >= 500) {
+      userMessage += 'Ошибка сервера. ';
+    } else {
+      userMessage += 'Не удалось подключиться к серверу. ';
+    }
+
+    if (errorDetails) {
+      userMessage += `Детали: ${errorDetails}`;
+    } else {
+      userMessage += 'Пожалуйста, попробуйте снова или выберите другой регион.';
+    }
+
+    this.errorMessage = userMessage;
     this.cdRef.detectChanges();
   }
 
