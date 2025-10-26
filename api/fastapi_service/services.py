@@ -811,17 +811,43 @@ async def calc_metrics(points, edges, oneway_ids):
     print(f"{datetime.now()} degree end")
 
     print(f"{datetime.now()} eigenvector begin")
-    eigenvector_dict = nx.eigenvector_centrality(G, max_iter=1000)
-    print(f"{datetime.now()} eigenvector end")
+    try:
+        eigenvector_dict = nx.eigenvector_centrality(G, max_iter=1000)
+        print(f"{datetime.now()} eigenvector end - succeeded")
+    except nx.PowerIterationFailedConvergence as e:
+        print(
+            f"{datetime.now()} eigenvector failed to converge, using fallback (zeros)"
+        )
+        # Fallback: use zeros for eigenvector centrality when convergence fails
+        # This can happen with certain graph structures (e.g., disconnected components, specific topologies)
+        eigenvector_dict = {node: 0.0 for node in G.nodes()}
+    except Exception as e:
+        print(
+            f"{datetime.now()} eigenvector calculation error: {type(e).__name__}: {e}"
+        )
+        # Generic fallback for any other errors
+        eigenvector_dict = {node: 0.0 for node in G.nodes()}
 
     print(f"{datetime.now()} betweenness begin")
-    betweenness_dict = nx.betweenness_centrality(G, k=100)
-    print(f"{datetime.now()} betweenness end")
+    try:
+        betweenness_dict = nx.betweenness_centrality(G, k=100)
+        print(f"{datetime.now()} betweenness end - succeeded")
+    except Exception as e:
+        print(
+            f"{datetime.now()} betweenness calculation error: {type(e).__name__}: {e}"
+        )
+        # Fallback: use zeros for betweenness centrality if calculation fails
+        betweenness_dict = {node: 0.0 for node in G.nodes()}
 
     betweenness_values = betweenness_dict.values()
 
-    max_betweenness = max(betweenness_values)
-    min_betweenness = min(betweenness_values)
+    # Handle edge case of empty betweenness values
+    if betweenness_values:
+        max_betweenness = max(betweenness_values)
+        min_betweenness = min(betweenness_values)
+    else:
+        max_betweenness = 0.0
+        min_betweenness = 0.0
 
     adjusted_max_betweenness = 1 if max_betweenness == 0 else max_betweenness
 
