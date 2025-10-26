@@ -82,7 +82,7 @@ app.add_middleware(
 
 if __name__ == "__main__":
     metadata.create_all(engine)
-    run("main:app", host="0.0.0.0", port=getenv("PORT", 8901), reload=True)
+    run("main:app", host="0.0.0.0", port=int(getenv("PORT", "8901")), reload=True)
 
 
 @app.get("/api/city/", response_model=CityBase)
