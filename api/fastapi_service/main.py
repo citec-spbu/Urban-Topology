@@ -146,7 +146,8 @@ async def city_graph(city_id: int, regions_ids: List[int], use_cache: bool = Tru
     try:
         os.makedirs("./data/caches", exist_ok=True)
 
-        cache_response_file_path = f"./data/caches/{city_id}_{regions_ids}.json"
+        regions_key = "_".join(map(str, sorted(regions_ids)))
+        cache_response_file_path = f"./data/caches/{city_id}_{regions_key}.json"
         if use_cache and os.path.exists(cache_response_file_path):
             with open(cache_response_file_path, "r") as f:
                 return json.load(f)
