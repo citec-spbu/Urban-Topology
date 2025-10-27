@@ -17,7 +17,7 @@ def list_to_csv_str(data: Iterable[Sequence], columns: List[str]):
 
 
 def graph_to_scheme(points, edges, pprop, wprop, metrics) -> GraphBase:
-    edges_str, edges_df = list_to_csv_str(
+    edges_str, _ = list_to_csv_str(
         edges, ["id", "id_way", "source", "target", "name"]
     )
     points_str, _ = list_to_csv_str(points, ["id", "longitude", "latitude"])
