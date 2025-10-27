@@ -51,7 +51,7 @@ def point_obj_to_list(db_record) -> List:
 
 
 def edge_obj_to_list(db_record) -> List:
-    return [db_record.id, db_record.id_way, db_record.id_src, db_record.id_dist, db_record.value]
+    return [db_record.id, db_record.id_way, db_record.id_src, db_record.id_dist, db_record.name]
 
 
 def record_obj_to_wprop(record) -> List:
