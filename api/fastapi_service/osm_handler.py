@@ -16,15 +16,14 @@ class HighwayWaysHandler(o.SimpleHandler):
         super(HighwayWaysHandler, self).__init__()
         self.required_road_types = {'motorway', 'trunk', 'primary', 'secondary', 
                                     'tertiary', 'unclassified', 'residential', 'road', 
-                                    'living_street'} # , 'service', 'pedestrian'
+                                    'living_street'}  # при необходимости можно добавить 'service' или 'pedestrian'
         self.used_nodes_ids = {}
         self.ways_tags = {}
 
     def way(self, w):
         if ('highway' in w.tags) and (w.tags.get('highway') in self.required_road_types):
             self.ways_tags[w.id] = {tag.k : tag.v for tag in w.tags}
-            # if not 'name' in w.tags:
-            #     self.ways_tags[w.id]['name'] = parse_name(w.nodes)
+            # Если у пути нет тега 'name', можно попытаться восстановить его по списку узлов
            
             graph = []
             for i in range(0, len(w.nodes) - 1):
@@ -58,7 +57,6 @@ def parse_osm(osm_file_path) -> Tuple[dict, dict]:
         ways.apply_file(osm_file_path, locations=False)
     except RuntimeError:
         pass
-   
     nodes = HighwayNodesHandler(ways.used_nodes_ids)
     try:
         nodes.apply_file(osm_file_path, locations=False)

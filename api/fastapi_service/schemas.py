@@ -26,6 +26,11 @@ class RegionBase(BaseModel):
     name : str
     regions : List[List[List[float]]]
 
+class RegionInfoBase(BaseModel):
+    id: int
+    admin_level: int
+    name: str
+
 class GraphBase(BaseModel):
     edges_csv : str
     points_csv : str

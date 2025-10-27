@@ -1,0 +1,24 @@
+from typing import Sequence, Optional
+from sqlalchemy import text, update
+from database import database, engine
+from database import CityAsync, CityPropertyAsync  # уже есть в database.py
+
+class CityRepository:
+    async def list(self, page: int, per_page: int) -> Sequence[dict]:
+        # эквивалент get_cities в services.py, но только SQL
+        rows = await database.fetch_all(CityAsync.select().offset(page*per_page).limit(per_page))
+        return rows
+
+    async def by_id(self, city_id: int) -> Optional[dict]:
+        row = await database.fetch_one(CityAsync.select().where(CityAsync.c.id == city_id))
+        return row
+
+    async def property_by_city(self, city_prop_id: int) -> Optional[dict]:
+        row = await database.fetch_one(
+            CityPropertyAsync.select().where(CityPropertyAsync.c.id == city_prop_id)
+        )
+        return row
+
+    def mark_downloaded(self, city_id: int) -> None:
+        with engine.begin() as conn:
+            conn.execute(update(CityAsync).where(CityAsync.c.id == city_id).values(downloaded=True))

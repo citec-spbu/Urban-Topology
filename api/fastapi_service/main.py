@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, HTTPException, Query, Body
 from uvicorn import run
 from os import getenv
-from schemas import CityBase, RegionBase, GraphBase
+from schemas import CityBase, RegionBase, RegionInfoBase, GraphBase
 from database import database, engine, metadata
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,10 +19,10 @@ from datetime import datetime
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup - Load data files
+    # Этап запуска — загружаем необходимые файлы данных
     data_dir = Path(os.environ.get("DATA_DIR", "./data"))
 
-    # Load regions GeoJSON
+    # Загружаем GeoJSON с регионами
     regions_file = data_dir / "regions.json"
     if not regions_file.exists():
         error_msg = f"Required data file not found: {regions_file.absolute()}"
@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-    # Load cities CSV
+    # Загружаем CSV со списком городов
     cities_file = data_dir / "cities.csv"
     if not cities_file.exists():
         error_msg = f"Required data file not found: {cities_file.absolute()}"
@@ -52,14 +52,14 @@ async def lifespan(app: FastAPI):
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-    # Connect to database
+    # Подключаемся к базе данных
     await database.connect()
     services.init_db(cities_info=app.state.cities_info)
     logger.info("Database connected and initialized")
 
     yield
 
-    # Shutdown
+    # Этап остановки — закрываем соединение с БД
     await database.disconnect()
     logger.info("Database disconnected")
 
@@ -123,9 +123,7 @@ async def city_regions(city_id: int):
     status_code = 200
     detail = "OK"
 
-    regions = services.get_regions(
-        city_id=city_id, regions=app.state.regions_df, cities=app.state.cities_info
-    )
+    regions = await services.get_regions(city_id=city_id, regions=app.state.regions_df, cities=app.state.cities_info)
     if regions is None:
         status_code = 404
         detail = "NOT FOUND"
@@ -150,10 +148,27 @@ async def city_graph(
 
         regions_key = "_".join(map(str, sorted(regions_ids)))
         cache_response_file_path = f"./data/caches/{city_id}_{regions_key}.json"
+    # Пытаемся вернуть валидный ответ из кэша
         if use_cache and os.path.exists(cache_response_file_path):
-            with open(cache_response_file_path, "r") as f:
-                return json.load(f)
+            try:
+                with open(cache_response_file_path, "r") as f:
+                    cached = json.load(f)
+                # Возвращаем только валидный кэш (ожидаем словарь с нужными полями)
+                required = {
+                    "edges_csv",
+                    "points_csv",
+                    "ways_properties_csv",
+                    "points_properties_csv",
+                    "metrics_csv",
+                }
+                if isinstance(cached, dict) and required.issubset(cached.keys()):
+                    return cached
+                else:
+                    logger.warning(f"Ignore invalid cache file: {cache_response_file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to read cache {cache_response_file_path}: {e}")
 
+    # Если подходящего кэша нет — собираем граф заново
         print(f"{datetime.now()} graph_from_ids begin")
         points, edges, pprop, wprop, metrics = await services.graph_from_ids(
             city_id=city_id, regions_ids=regions_ids, regions=app.state.regions_df
@@ -166,39 +181,45 @@ async def city_graph(
             logger.error(f"{request} {status_code} {detail}")
             raise HTTPException(status_code=status_code, detail=detail)
 
-        # Check if graph is empty
+    # Проверяем, что граф действительно содержит данные
         if len(points) == 0 or len(edges) == 0:
             status_code = 422
-            detail = f"No road network data found for region(s) {regions_ids} in city {city_id}. The data for this region has not been downloaded from OSM yet. Please ensure the region data is downloaded before requesting the graph."
+            detail = (
+                f"No road network data found for region(s) {regions_ids} in city {city_id}. "
+                "The data for this region has not been downloaded from OSM yet. Please ensure the region data is downloaded before requesting the graph."
+            )
             logger.error(f"{request} {status_code} {detail}")
             raise HTTPException(status_code=status_code, detail=detail)
 
+    # Формируем Pydantic-модель результата
         graphBase = services.graph_to_scheme(points, edges, pprop, wprop, metrics)
 
-        # Support both Pydantic v1 and v2: prefer model_dump() (v2), fallback to dict() (v1)
+    # Готовим данные к сериализации
         data = (
-            graphBase.model_dump()
-            if hasattr(graphBase, "model_dump")
-            else graphBase.dict()
+            graphBase.model_dump() if hasattr(graphBase, "model_dump") else graphBase.dict()
         )
-        import tempfile
 
-        dirpath = os.path.dirname(cache_response_file_path)
-        with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False) as tmp:
-            json.dump(data, tmp)
-            tmp.flush()
-            os.fsync(tmp.fileno())
-            tmp_name = tmp.name
-        os.replace(tmp_name, cache_response_file_path)
+    # Пытаемся атомарно записать кэш; ошибка записи не должна ломать ответ
+        try:
+            import tempfile
+
+            dirpath = os.path.dirname(cache_response_file_path)
+            with tempfile.NamedTemporaryFile("w", dir=dirpath, delete=False) as tmp:
+                json.dump(data, tmp)
+                tmp.flush()
+                os.fsync(tmp.fileno())
+                tmp_name = tmp.name
+            os.replace(tmp_name, cache_response_file_path)
+        except Exception as e:
+            logger.warning(f"Failed to write cache {cache_response_file_path}: {e}")
 
         logger.info(f"{request} {status_code} {detail}")
         return graphBase
-
     except HTTPException:
-        # Re-raise HTTP exceptions without modification
+    # Исключения FastAPI повторно выбрасываем без изменений
         raise
     except Exception as e:
-        # Catch any other unexpected errors and provide detailed error message
+    # Ловим прочие ошибки и формируем подробное сообщение
         status_code = 500
         error_type = type(e).__name__
         error_msg = str(e)
