@@ -24,3 +24,11 @@
 <div *ngIf="loading" class="overlay">
     <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
 </div>
+
+<div *ngIf="errorMessage" class="error-notification">
+    <div class="error-content">
+        <span class="error-icon">⚠️</span>
+        <span class="error-text">{{ errorMessage }}</span>
+        <button class="error-close" (click)="errorMessage = ''" title="Close">✕</button>
+    </div>
+</div>

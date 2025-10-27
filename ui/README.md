@@ -6,13 +6,36 @@ This project was generated with [Angular CLI](https://github.com/angular/angular
 
 Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
 
+## Build
+
+### Development Build
+
+```bash
+ng build
+# Uses environment.ts with localhost API
+```
+
+### Production Build
+
+```bash
+ng build --configuration production
+# Uses environment.prod.ts with production API URL
+```
+
+The build artifacts will be stored in the `dist/` directory.
+
+### Environment Configuration
+
+The application uses environment-specific configuration files:
+
+- **Development**: `src/environments/environment.ts` (localhost API)
+- **Production**: `src/environments/environment.prod.ts` (production API)
+
+To change the production API URL, edit `src/environments/environment.prod.ts` or use CI/CD environment variables.
+
 ## Code scaffolding
 
 Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
-
-## Build
-
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
 
 ## Running unit tests
 
