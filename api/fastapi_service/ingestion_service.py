@@ -17,7 +17,6 @@ class IngestionService:
         self.auth_file_path = auth_file_path
 
     def ensure_city(self, city_row: DataFrame) -> tuple[int, bool]:
-        """Return (city_id, downloaded_already). Create city/property if needed."""
         city_name = city_row['Город']
         existing = self.repo.find_city_by_name(city_name)
         if existing is not None:
@@ -33,7 +32,6 @@ class IngestionService:
         return city_id, False
 
     def import_if_needed(self, city_row: DataFrame) -> Optional[int]:
-        """Create city if needed and import graph when PBF present and not yet downloaded. Returns city_id or None."""
         city_name = city_row['Город']
         city_id, downloaded = self.ensure_city(city_row)
 

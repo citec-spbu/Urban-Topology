@@ -1,7 +1,7 @@
 """Преобразование объектов БД и вычислений в удобные схемы/CSV."""
 
 import io
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Sequence, Optional
 
 import pandas as pd
 
@@ -9,7 +9,6 @@ from schemas import GraphBase, PointBase
 
 
 def list_to_csv_str(data: Iterable[Sequence], columns: List[str]):
-    """Convert iterable of rows to CSV string and DataFrame."""
     buffer = io.StringIO()
     df = pd.DataFrame(data, columns=columns)
     df.to_csv(buffer, index=False)
@@ -63,7 +62,7 @@ def record_obj_to_pprop(record) -> List:
     return [record.id_point, record.property, record.value]
 
 
-def point_to_scheme(point) -> PointBase:
+def point_to_scheme(point) -> Optional[PointBase]:
     """Преобразует объект точки ORM в Pydantic-схему."""
     if point is None:
         return None

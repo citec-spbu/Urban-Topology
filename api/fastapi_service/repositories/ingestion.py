@@ -1,14 +1,19 @@
+import logging
 import os
+import subprocess
+from pathlib import Path
 from typing import Optional
+
 from sqlalchemy import text, update
 
 from database import engine, DATABASE_URL, CityAsync, SessionLocal
 from models import City, CityProperty
 
 
-class IngestionRepository:
-    """Low-level ingestion operations: create city records and import OSM graph into DB."""
+logger = logging.getLogger(__name__)
 
+
+class IngestionRepository:
     def find_city_by_name(self, city_name: str) -> Optional[object]:
         with engine.connect() as conn:
             q = CityAsync.select().where(CityAsync.c.city_name == city_name)
@@ -38,28 +43,80 @@ class IngestionRepository:
             conn.execute(update(CityAsync).where(CityAsync.c.id == city_id).values(downloaded=True))
 
     def apply_osmosis_schema(self) -> None:
-        cmd = f"psql {DATABASE_URL} -f /osmosis/script/pgsimple_schema_0.6.sql"
-        rc = os.system(cmd)
-        if rc != 0:
-            raise RuntimeError(f"psql schema apply failed with code {rc}")
+        try:
+            result = subprocess.run(
+                [
+                    "psql",
+                    DATABASE_URL,
+                    "-f",
+                    "/osmosis/script/pgsimple_schema_0.6.sql",
+                ],
+                shell=False,
+                timeout=300,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError("psql schema apply timed out") from exc
 
-    def run_osmosis_and_load(self, *, file_path: str, auth_file_path: str, required_road_types: tuple[str, ...]) -> None:
-        road_file_path = file_path[:-8] + "_highway.pbf"
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            raise RuntimeError(
+                f"psql schema apply failed with code {result.returncode}: {stderr}"
+            )
+
+    def run_osmosis_and_load(
+        self,
+        *,
+        file_path: str,
+        auth_file_path: str,
+        required_road_types: tuple[str, ...],
+        city_name: str,
+    ) -> None:
+        base = Path(file_path)
+        stem = base.name
+        for suf in (".osm.pbf", ".pbf"):
+            if stem.endswith(suf):
+                stem = stem[: -len(suf)]
+                break
+        road_file_path = str(base.with_name(f"{stem}_highway.pbf"))
         types = ",".join(required_road_types)
-        cmd = (
-            f"/osmosis/bin/osmosis --read-pbf-fast file=\"{file_path}\" "
-            f"--tf accept-ways highway={types} --tf reject-ways side_road=yes --used-node "
-            f"--write-pbf omitmetadata=true file=\"{road_file_path}\" "
-            f"&& /osmosis/bin/osmosis --read-pbf-fast file=\"{road_file_path}\" --write-pgsimp authFile=\"{auth_file_path}\" "
-            f"&& rm \"{road_file_path}\""
-        )
-        rc = os.system(cmd)
-        if rc != 0:
-            raise RuntimeError(f"osmosis import failed with code {rc}")
-
+        try:
+            logger.info(
+                "Starting osmosis for city '%s' (file: %s)",
+                city_name,
+                file_path,
+            )
+            subprocess.run(
+                [
+                    "/osmosis/bin/osmosis",
+                    "--read-pbf-fast", f"file={file_path}",
+                    "--tf", f"accept-ways", f"highway={types}",
+                    "--tf", "reject-ways", "side_road=yes",
+                    "--used-node",
+                    "--write-pbf", "omitmetadata=true", f"file={road_file_path}",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "/osmosis/bin/osmosis",
+                    "--read-pbf-fast", f"file={road_file_path}",
+                    "--write-pgsimp", f"authFile={auth_file_path}",
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"osmosis import failed: {e.returncode}") from e
+        finally:
+            try:
+                os.remove(road_file_path)
+            except OSError:
+                pass
     def fill_city_graph_from_osm_tables(self, *, city_id: int) -> None:
         with engine.begin() as conn:
-            # Ways
+            # Заполняем таблицу "Ways"
             conn.execute(text(
                 """
                 INSERT INTO "Ways" (id, id_city)
@@ -68,7 +125,7 @@ class IngestionRepository:
                 """
             ), {"city_id": city_id})
 
-            # Points
+            # Добавляем точки в таблицу "Points"
             conn.execute(text(
                 """
                 INSERT INTO "Points" (id, longitude, latitude)
@@ -79,7 +136,7 @@ class IngestionRepository:
                 """
             ))
 
-            # Properties (unique keys from nodes/ways)
+            # Свойства (уникальные ключи из узлов и путей)
             conn.execute(text(
                 """
                 INSERT INTO "Properties" (property)
@@ -93,29 +150,29 @@ class IngestionRepository:
                 """
             ))
 
-            # WayProperties
+            # Свойства путей
             conn.execute(text(
                 """
                 INSERT INTO "WayProperties" (id_way, id_property, value)
                 SELECT wt.way_id, p.id, wt.v
                 FROM way_tags wt
                 JOIN "Ways" w ON w.id = wt.way_id
-                JOIN "Properties" p ON p.property LIKE wt.k;
+                JOIN "Properties" p ON LOWER(TRIM(p.property)) = LOWER(TRIM(wt.k));
                 """
             ))
 
-            # PointProperties
+            # Свойства точек
             conn.execute(text(
                 """
                 INSERT INTO "PointProperties" (id_point, id_property, value)
                 SELECT nt.node_id, pr.id, nt.v
                 FROM node_tags nt
                 JOIN "Points" pt ON pt.id = nt.node_id
-                JOIN "Properties" pr ON pr.property LIKE nt.k;
+                JOIN "Properties" pr ON LOWER(TRIM(pr.property)) = LOWER(TRIM(nt.k));
                 """
             ))
 
-            # Edges oneway
+            # Рёбра для односторонних дорог
             conn.execute(text(
                 """
                 INSERT INTO "Edges" (id_way, id_src, id_dist)
@@ -129,7 +186,7 @@ class IngestionRepository:
                 """
             ))
 
-            # Edges not oneway (forward)
+            # Рёбра двусторонних дорог (прямое направление)
             conn.execute(text(
                 """
                 WITH oneway_way_id AS (
@@ -147,7 +204,7 @@ class IngestionRepository:
                 """
             ))
 
-            # Edges not oneway (reverse)
+            # Рёбра двусторонних дорог (обратное направление)
             conn.execute(text(
                 """
                 WITH oneway_way_id AS (
@@ -160,14 +217,26 @@ class IngestionRepository:
                 JOIN way_nodes wn ON wn.way_id = w.id
                 JOIN way_nodes wn2 ON wn2.way_id = wn.way_id
                 WHERE w.id NOT IN (SELECT id FROM oneway_way_id)
-                  AND wn.sequence_id + 1 = wn2.sequence_id
+                  AND wn.sequence_icd + 1 = wn2.sequence_id
                 ORDER BY wn2.sequence_id DESC;
                 """
             ))
 
-    def import_city_graph(self, *, city_id: int, file_path: str, city_name: str, auth_file_path: str,
-                           required_road_types: tuple[str, ...]) -> None:
+    def import_city_graph(
+        self,
+        *,
+        city_id: int,
+        file_path: str,
+        city_name: str,
+        auth_file_path: str,
+        required_road_types: tuple[str, ...],
+    ) -> None:
         self.apply_osmosis_schema()
-        self.run_osmosis_and_load(file_path=file_path, auth_file_path=auth_file_path, required_road_types=required_road_types)
+        self.run_osmosis_and_load(
+            file_path=file_path,
+            auth_file_path=auth_file_path,
+            required_road_types=required_road_types,
+            city_name=city_name,
+        )
         self.fill_city_graph_from_osm_tables(city_id=city_id)
         self.mark_downloaded(city_id)

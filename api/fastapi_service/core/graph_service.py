@@ -1,5 +1,6 @@
 """Сборка графа по выбранному региону и расчёт метрик центральности."""
 
+import logging
 from typing import List
 
 import networkx as nx
@@ -12,26 +13,42 @@ from core.converters import (
     record_obj_to_pprop,
 )
 
+
+logger = logging.getLogger(__name__)
+
 async def graph_from_poly(city_id, polygon):
-    """Build graph (points, edges, properties, metrics) for polygon (Shapely polygon)."""
     repo_city = CityRepository()
     city = await repo_city.by_id(city_id)
     if city is None or not city.downloaded:
-        return None, None, None, None
+        return None, None, None, None, None
 
     polygon_wkt = polygon.wkt
 
     repo_graph = GraphRepository()
 
-    # property ids
+    # Получаем идентификаторы нужных свойств
     prop_id_name = await repo_graph.property_id("name")
     prop_id_highway = await repo_graph.property_id("highway")
 
-    # points in polygon (PostGIS)
+    if prop_id_name is None:
+        logger.error(
+            "Missing property id for 'name' (city_id=%s); graph build aborted",
+            city_id,
+        )
+        return None, None, None, None, None
+
+    if prop_id_highway is None:
+        logger.error(
+            "Missing property id for 'highway' (city_id=%s); graph build aborted",
+            city_id,
+        )
+        return None, None, None, None, None
+
+    # Выбираем точки внутри полигона (PostGIS)
     res_points = await repo_graph.points_in_polygon(city_id, polygon_wkt)
     points = list(map(point_obj_to_list, res_points))
 
-    # edges filtered by polygon and highway types (PostGIS)
+    # Фильтруем рёбра по полигону и типам дорог (PostGIS)
     road_types = (
         'motorway', 'trunk', 'primary', 'secondary', 'tertiary',
         'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link'
@@ -47,7 +64,7 @@ async def graph_from_poly(city_id, polygon):
     )
     edges = list(map(edge_obj_to_list, res_edges))
 
-    # Collect IDs for properties
+    # Собираем идентификаторы свойств
     ways_prop_ids = {e[1] for e in edges}
     points_prop_ids = {p[0] for p in points}
 
@@ -64,7 +81,7 @@ async def graph_from_poly(city_id, polygon):
 
 
 async def calc_metrics(points, edges, oneway_ids):
-    # Empty graph -> return empty
+    # Пустой граф — возвращаем пустой результат
     if not points:
         return []
 

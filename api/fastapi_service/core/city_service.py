@@ -1,35 +1,35 @@
 """Утилиты для чтения городов из репозитория и приведения их к схемам."""
 
-from typing import List, Optional
+from typing import List, Optional, Mapping, Any
 
 from models import City, CityProperty
 from repositories import CityRepository
 from schemas import CityBase, PropertyBase
 
 
-async def property_to_scheme(prop: Optional[CityProperty]) -> Optional[PropertyBase]:
+async def property_to_scheme(prop: Optional[Mapping[str, Any]]) -> Optional[PropertyBase]:
     """Преобразует запись из БД о свойствах города в Pydantic-схему."""
     if prop is None:
         return None
 
     return PropertyBase(
-        population=prop.population,
-        population_density=prop.population_density,
-        time_zone=prop.time_zone,
-        time_created=str(prop.time_created),
-        c_latitude=prop.c_latitude,
-        c_longitude=prop.c_longitude,
+        population=prop["population"],
+        population_density=prop.get("population_density"),
+        time_zone=prop["time_zone"],
+        time_created=str(prop["time_created"]),
+        c_latitude=prop["c_latitude"],
+        c_longitude=prop["c_longitude"],
     )
 
 
-async def city_to_scheme(city: Optional[City]) -> Optional[CityBase]:
+async def city_to_scheme(city: Optional[Mapping[str, Any]]) -> Optional[CityBase]:
     """Дополняет DTO города связанными свойствами и возвращает CityBase."""
     if city is None:
         return None
 
-    city_base = CityBase(id=city.id, city_name=city.city_name, downloaded=city.downloaded)
+    city_base = CityBase(id=city["id"], city_name=city["city_name"], downloaded=city["downloaded"])
     repo = CityRepository()
-    prop = await repo.property_by_city(city.id_property)
+    prop = await repo.property_by_city(city["id_property"])
     city_base.property = await property_to_scheme(prop=prop)
     return city_base
 

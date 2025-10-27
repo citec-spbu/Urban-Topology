@@ -1,7 +1,4 @@
 """Фасад, который собирает сервисы ядра и экспортирует их в старый API."""
-
-"""Фасад, который собирает сервисы ядра и экспортирует их в старый API."""
-
 from database import SessionLocal
 from geopandas.geodataframe import GeoDataFrame
 from typing import List, TYPE_CHECKING
@@ -84,5 +81,3 @@ async def graph_from_ids(city_id : int, regions_ids : List[int], regions : GeoDa
     print(f"{datetime.now()} graph_from_poly end")
     return gfp
 
-
-# Graph-building and metrics calculation moved to core.graph_service

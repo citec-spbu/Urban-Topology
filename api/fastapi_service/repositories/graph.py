@@ -1,4 +1,4 @@
-# api/fastapi_service/repositories/graph.py
+# Репозиторий для работы с графами в api/fastapi_service
 from typing import Iterable, Sequence, Optional
 from sqlalchemy import text
 from database import database, engine
@@ -23,7 +23,7 @@ class GraphRepository:
         })
 
     async def property_id(self, name: str) -> int:
-        # Используем строковый SQL вместо text(), т.к. fetch_one с TextClause падает на некоторых версиях "databases"
+    # Используем строковый SQL вместо text(), т.к. fetch_one с TextClause падает на некоторых версиях "databases"
         row = await database.fetch_one(
             'SELECT id FROM "Properties" WHERE property = :name',
             values={"name": name}
@@ -32,7 +32,7 @@ class GraphRepository:
 
     async def edges_in_bbox(self, city_id: int, bbox, prop_id_name: int, prop_id_highway: int,
                             highway_types: Iterable[str]) -> Sequence[tuple]:
-        # :types — массив строк
+    # :types — массив строк
         q = (
             """
             WITH named_streets AS (
@@ -89,7 +89,7 @@ class GraphRepository:
         return await database.fetch_all(q, values={"ids": ids})
 
     def point_props_via_temp(self, point_ids: Iterable[int]) -> Sequence[tuple]:
-        # как у тебя сейчас через TEMP TABLE — оставляем, но прячем внутрь репозитория
+    # Как и раньше, создаём временную таблицу, но изолируем логику внутри репозитория
         ids = list(point_ids)
         if not ids:
             return []
@@ -161,7 +161,7 @@ class GraphRepository:
              AND ST_Within(ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326), poly.g))
         """
         if not require_both_endpoints and use_midpoint:
-            # midpoint inside polygon
+            # Вариант с проверкой середины ребра внутри полигона
             condition = """
                 ST_Within(
                     ST_LineInterpolatePoint(
@@ -175,7 +175,7 @@ class GraphRepository:
                 )
             """
         elif use_midpoint:
-            # both endpoints OR midpoint
+            # Вариант с двумя концами или серединой внутри полигона
             condition = """
                 (
                     (ST_Within(ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326), poly.g)
