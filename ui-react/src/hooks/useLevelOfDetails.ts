@@ -1,6 +1,6 @@
 //TownComponent.districtsLOD -> useLevelOfDetail -- управление уровнями детализации районов
 import { useState, useMemo } from 'react';
-import { Region } from '../types';
+import type { Region } from '../types/region';
 
 
 export const useLevelOfDetail = (districtGroups: Region[][]) => {

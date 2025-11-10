@@ -42,19 +42,20 @@ services:
 
   frontend:
     build:
-      context: ui/
-      dockerfile: Dockerfile.dev
-    image: ts_service    
+      context: ui-react/
+      dockerfile: Dockerfile
+    image: react_service
     depends_on:
       - webserver
     ports:
-      - "4200:4200"
+      - "3000:80"
     networks:
       - network
 
-volumes:     
+volumes:
   pgdata:
   logsvol:
+
 
 networks:
   network:

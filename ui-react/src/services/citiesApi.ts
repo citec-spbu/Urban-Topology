@@ -1,7 +1,9 @@
 //типа town.service
 
 import { api } from "./api";
-import { City, Region, GraphData } from "../types";
+import type { City } from "../types/city";
+import type { Region } from "../types/region";
+import type { GraphData } from "../types/graph";
 
 export const citiesApi = {
   getCities: async (page: number, perPage: number) => {

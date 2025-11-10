@@ -2,7 +2,7 @@
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { citiesApi } from '../services/citiesApi';
-import { GraphData } from '../types';
+import type { GraphData } from '../types/graph';
 
 const logGraphError = (context: string, error: any, params?: any) => {
   console.error(`Ошибка при ${context}:`, {
@@ -70,7 +70,7 @@ export const useGraphFromBbox = () => {
         nodesCount: variables.nodes.length,
       });
     },
-    
+
     //повторные попытки
     retry: (failureCount, error: any) => {
       if (error?.response?.status === 404) return false;

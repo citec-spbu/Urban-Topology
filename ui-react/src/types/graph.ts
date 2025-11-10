@@ -1,4 +1,4 @@
-export interface Edge{
+export interface Edge {
   from: string,
   to: string,
   name?: string,
@@ -6,36 +6,41 @@ export interface Edge{
   id?: string
 }
 
-export interface INode{
-    lat: number,
-    lon: number,
-    way_id: number,
-    name?: string,
-    degree_value?: string,
-    in_degree_value?: string,
-    out_degree_value?: string,
-    eigenvector_value?: string,
-    betweenness_value?: string,
-    radius_value?: string,
-    color_value?: string
+export interface INode {
+  lat: number,
+  lon: number,
+  way_id: number | string,
+  name?: string,
+  degree_value?: string,
+  in_degree_value?: string,
+  out_degree_value?: string,
+  eigenvector_value?: string,
+  betweenness_value?: string,
+  radius_value?: string,
+  color_value?: string
 }
 
-export interface GraphData{
-  nodes: {
+export interface GraphData {
+  nodes?: {
     [key: string]: INode
   },
-  edges: {
+  edges?: {
     [key: string]: Edge
-  }
+  },
+  edges_csv?: string,
+  points_csv?: string,
+  ways_properties_csv?: string,
+  points_properties_csv?: string,
+  metrics_csv?: string
 }
 
-export interface Metric{
-    id: string,
-    degree: string,
-    in_degree: string,
-    out_degree: string,
-    eigenvector: string,
-    betweenness: string,
-    radius: string,
-    color: string
-  } 
+export interface Metric {
+  id: string,
+  degree: string,
+  in_degree: string,
+  out_degree: string,
+  eigenvector: string,
+  betweenness: string,
+  radius: string,
+  color: string
+} 

@@ -3,7 +3,8 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 //import { useNavigate } from "react-router-dom";
 import { citiesApi } from "../services/citiesApi";
-import { City, Region } from "../types";
+import type { City } from "../types/city";
+import type { Region } from "../types/region";
 
 /**
  * Группировка районов по admin_level
@@ -31,7 +32,7 @@ const groupRegionsByLevel = (regions: Region[]): Region[][] => {
  * Заменяет TownComponent + TownService
  */
 export const useTown = (townId: string) => {
-//   const navigate = useNavigate(); 
+  //   const navigate = useNavigate(); 
   const id = Number(townId);
 
   // Загрузка города
@@ -62,9 +63,9 @@ export const useTown = (townId: string) => {
   // Добавить districts в объект города
   const cityWithDistricts: City | undefined = town
     ? {
-        ...town,
-        districts: districtGroups,
-      }
+      ...town,
+      districts: districtGroups,
+    }
     : undefined;
 
   return {

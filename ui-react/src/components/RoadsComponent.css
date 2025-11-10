@@ -1,0 +1,10 @@
+.roads-map-wrapper {
+    height: 100%;
+    position: relative;
+    background: white;
+}
+
+.roads-placeholder {
+    padding: 2em;
+    text-align: center;
+}
