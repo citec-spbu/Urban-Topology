@@ -10,7 +10,7 @@ const MAP_ZOOM = 10;
 
 const buildPreviewUrl = (city: City) => {
     const { c_longitude, c_latitude } = city.property;
-    return `http://static-maps.yandex.ru/1.x/?lang=en-US&ll=${c_longitude},${c_latitude}&size=450,450&z=${MAP_ZOOM}&l=map`;
+    return `https://static-maps.yandex.ru/1.x/?lang=en-US&ll=${c_longitude},${c_latitude}&size=450,450&z=${MAP_ZOOM}&l=map`;
 };
 
 export const TownsPage = () => {

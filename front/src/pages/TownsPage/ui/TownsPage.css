@@ -168,3 +168,31 @@
     white-space: nowrap;
     border-width: 0;
 }
+
+.towns-search input:focus-visible,
+.towns-search button:focus-visible,
+.towns-actions button:focus-visible,
+.town-card:focus-visible,
+.town-card__download:focus-visible {
+    outline: 2px solid #2b6eff;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(43, 110, 255, 0.18);
+}
+
+.towns-search input:focus:not(:focus-visible),
+.towns-search button:focus:not(:focus-visible),
+.towns-actions button:focus:not(:focus-visible),
+.town-card:focus:not(:focus-visible),
+.town-card__download:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .town-card,
+    .towns-search button,
+    .towns-actions button,
+    .towns-search input {
+        transition: none !important;
+    }
+}

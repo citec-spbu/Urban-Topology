@@ -1,7 +1,7 @@
-import type { GraphData } from '@/shared/types'
-import type { LatLngBoundsExpression } from 'leaflet'
-import React, { useEffect, useMemo } from 'react'
-import { CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
+import type {GraphData} from '@/shared/types'
+import type {LatLngBoundsExpression} from 'leaflet'
+import React, {useEffect, useMemo} from 'react'
+import {CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMap} from 'react-leaflet'
 import './RoadsComponent.css'
 
 interface RoadsComponentProps {
@@ -82,7 +82,7 @@ const computeBounds = (nodes: Record<string, any>): LatLngBoundsExpression | nul
     ];
 };
 
-const MapResizer: React.FC<{ active?: boolean; bounds?: LatLngBoundsExpression | null }> = ({ active, bounds }) => {
+const MapResizer: React.FC<{ active?: boolean; bounds?: LatLngBoundsExpression | null }> = ({active, bounds}) => {
     const map = useMap();
 
     useEffect(() => {
@@ -94,7 +94,7 @@ const MapResizer: React.FC<{ active?: boolean; bounds?: LatLngBoundsExpression |
 
     useEffect(() => {
         if (active && bounds) {
-            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+            map.fitBounds(bounds, {padding: [40, 40], maxZoom: 17});
         }
     }, [active, bounds, map]);
 
@@ -107,14 +107,14 @@ const MapResizer: React.FC<{ active?: boolean; bounds?: LatLngBoundsExpression |
     return null;
 };
 
-export const RoadsComponent: React.FC<RoadsComponentProps> = ({ graphData, onDownload, isActive }) => {
+export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDownload, isActive}) => {
     if (import.meta.env.DEV) {
         console.log('graphData:', graphData);
     }
 
     let nodes: Record<string, any> = {};
     let edges: any[] = [];
-    
+
     if (hasCsvGraphData(graphData)) {
         const metricRows = parseCSV((graphData as any).metrics_csv);
         const metricsById = metricRows.reduce<Record<string, Record<string, string>>>((acc, row) => {
@@ -129,7 +129,7 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({ graphData, onDow
             if (!id) return;
 
             const lat = toNumber(row.latitude || row.lat || row.latitude_value);
-            const lon = toNumber(row.longitude || row.long || row.longtitude);
+            const lon = toNumber(row.longitude || row.long || row.longitude_value || row.longtitude);
             if (lat === undefined || lon === undefined) return;
 
             const metric = metricsById[id] ?? {};
@@ -183,9 +183,9 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({ graphData, onDow
                 zoom={12}
                 scrollWheelZoom
                 className="leaflet-map"
-                style={{ height: '100%', width: '100%', flex: 1 }}
+                style={{height: '100%', width: '100%', flex: 1}}
             >
-                <MapResizer active={isActive} bounds={bounds} />
+                <MapResizer active={isActive} bounds={bounds}/>
                 <TileLayer
                     attribution='&copy; OpenStreetMap contributors'
                     url='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -201,7 +201,7 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({ graphData, onDow
                         <Polyline
                             key={edge.id || idx}
                             positions={[getNodeLatLng(from), getNodeLatLng(to)]}
-                            pathOptions={{ color: '#85818c', weight: 4 }}
+                            pathOptions={{color: '#85818c', weight: 4}}
                         />
                     );
                 })}
@@ -210,16 +210,20 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({ graphData, onDow
                         key={id}
                         center={getNodeLatLng(node)}
                         radius={Number(node.radius_value) || 5}
-                        pathOptions={{ color: node.color_value || '#008cff', fillColor: node.color_value || '#008cff', fillOpacity: 0.8 }}
+                        pathOptions={{
+                            color: node.color_value || '#008cff',
+                            fillColor: node.color_value || '#008cff',
+                            fillOpacity: 0.8
+                        }}
                     >
                         <Popup>
-                            <b>Перекрёсток</b><br />
-                            ID: {id}<br />
-                            Degree: {node.degree_value}<br />
-                            In-Degree: {node.in_degree_value}<br />
-                            Out-Degree: {node.out_degree_value}<br />
-                            Eigenvector: {node.eigenvector_value}<br />
-                            Betweenness: {node.betweenness_value}<br />
+                            <b>Перекрёсток</b><br/>
+                            ID: {id}<br/>
+                            Degree: {node.degree_value}<br/>
+                            In-Degree: {node.in_degree_value}<br/>
+                            Out-Degree: {node.out_degree_value}<br/>
+                            Eigenvector: {node.eigenvector_value}<br/>
+                            Betweenness: {node.betweenness_value}<br/>
                         </Popup>
                     </CircleMarker>
                 ))}

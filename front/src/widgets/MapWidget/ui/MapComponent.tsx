@@ -6,7 +6,7 @@ import { MapContainer, Polygon, Popup, TileLayer, useMap } from 'react-leaflet'
 interface MapComponentProps {
     center: LatLngTuple;
     regions: Region[][];
-    onGraphInfo: (params: { name: string; regionId?: number; polygon?: [number, number][] }) => void;
+    onGraphInfo: (params: { name: string; regionId?: number }) => void;
     isActive?: boolean;
 }
 
