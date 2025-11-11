@@ -48,7 +48,7 @@ services:
     depends_on:
       - webserver
     ports:
-      - "4200:4200"
+      - "4200:80"
     networks:
       - network
 
