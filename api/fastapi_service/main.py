@@ -73,6 +73,7 @@ app.add_middleware(
         "http://localhost:4200",
         "http://158.160.17.229:4200",
         "http://0.0.0.0:4200",
+        "http://localhost:3000",  # React frontend
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -111,6 +112,8 @@ async def get_cities(page: int = Query(ge=0), per_page: int = Query(gt=0)):
     detail = "OK"
 
     cities = await services.get_cities(page=page, per_page=per_page)
+    if cities is None:
+        cities = []
 
     logger.info(f"{request} {status_code} {detail}")
     return cities

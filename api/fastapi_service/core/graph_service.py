@@ -1,6 +1,8 @@
 """Сборка графа по выбранному региону и расчёт метрик центральности."""
 
+import asyncio
 import logging
+from pathlib import Path
 from typing import List
 
 import networkx as nx
@@ -12,6 +14,7 @@ from core.converters import (
     record_obj_to_wprop,
     record_obj_to_pprop,
 )
+from core.ingestion_utils import add_graph_to_db
 
 
 logger = logging.getLogger(__name__)
@@ -19,8 +22,51 @@ logger = logging.getLogger(__name__)
 async def graph_from_poly(city_id, polygon):
     repo_city = CityRepository()
     city = await repo_city.by_id(city_id)
-    if city is None or not city.downloaded:
+    if city is None:
         return None, None, None, None, None
+
+    if not city.downloaded:
+        city_name = city['city_name']
+        pbf_path = Path("./data/cities_osm") / f"{city_name}.pbf"
+
+        if not pbf_path.exists():
+            logger.warning(
+                "Graph for city %s is requested but PBF is missing at %s",
+                city_id,
+                pbf_path,
+            )
+            return None, None, None, None, None
+
+        logger.info(
+            "City %s graph not in DB; attempting on-demand import from %s",
+            city_id,
+            pbf_path,
+        )
+
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                None,
+                add_graph_to_db,
+                city_id,
+                str(pbf_path),
+                city_name,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to import graph for city %s from %s",
+                city_id,
+                pbf_path,
+            )
+            return None, None, None, None, None
+
+        city = await repo_city.by_id(city_id)
+        if city is None or not city.downloaded:
+            logger.error(
+                "Graph import for city %s completed but city still not marked as downloaded",
+                city_id,
+            )
+            return None, None, None, None, None
 
     polygon_wkt = polygon.wkt
 

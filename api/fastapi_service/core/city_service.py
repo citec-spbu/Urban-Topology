@@ -12,13 +12,15 @@ async def property_to_scheme(prop: Optional[Mapping[str, Any]]) -> Optional[Prop
     if prop is None:
         return None
 
+    prop_data = dict(prop)
+
     return PropertyBase(
-        population=prop["population"],
-        population_density=prop.get("population_density"),
-        time_zone=prop["time_zone"],
-        time_created=str(prop["time_created"]),
-        c_latitude=prop["c_latitude"],
-        c_longitude=prop["c_longitude"],
+        population=prop_data["population"],
+        population_density=prop_data.get("population_density"),
+        time_zone=prop_data["time_zone"],
+        time_created=str(prop_data["time_created"]),
+        c_latitude=prop_data["c_latitude"],
+        c_longitude=prop_data["c_longitude"],
     )
 
 

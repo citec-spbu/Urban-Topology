@@ -1,0 +1,38 @@
+.roads-map-wrapper {
+    height: 100%;
+    position: relative;
+    background: white;
+    display: flex;
+    flex-direction: column;
+}
+
+.roads-placeholder {
+    padding: 2em;
+    text-align: center;
+}
+
+.roads-panel {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.roads-download-btn {
+    padding: 10px 20px;
+    background: #830000;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.roads-download-btn:hover {
+    background: #a00000;
+}
+
+.roads-download-btn:active {
+    transform: translateY(1px);
+}
