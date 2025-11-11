@@ -42,13 +42,13 @@ services:
 
   frontend:
     build:
-      context: ui-react/
+      context: front/
       dockerfile: Dockerfile
     image: react_service
     depends_on:
       - webserver
     ports:
-      - "3000:80"
+      - "4200:4200"
     networks:
       - network
 

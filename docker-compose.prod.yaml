@@ -41,7 +41,7 @@ services:
 
   frontend:
     build:
-      context: ui/
+      context: front/
       dockerfile: Dockerfile
       args:
         # Override this with your production API URL
