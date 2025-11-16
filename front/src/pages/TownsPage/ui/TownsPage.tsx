@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import './TownsPage.css'
 
 const CITIES_PER_PAGE = 15;
-const MAP_ZOOM = 10;
+const MAP_ZOOM = 11;
 
 const buildPreviewUrl = (city: City) => {
     const { c_longitude, c_latitude } = city.property;
