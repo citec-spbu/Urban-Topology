@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import './TownsPage.css'
 
-const DEFAULT_PER_PAGE = 1000;
+const DEFAULT_PER_PAGE = 15;
 const MAP_ZOOM = 10;
 
 const buildPreviewUrl = (city: City) => {
@@ -105,19 +105,36 @@ export const TownsPage = () => {
                 ))}
             </div>
 
-            <div className="towns-actions">
-                <button
-                    type="button"
-                    onClick={handleLoadMore}
-                    disabled={isFetching || noMoreCities}
-                >
-                    {noMoreCities ? 'Города закончились' : isFetching ? 'Загрузка...' : 'Загрузить ещё'}
-                </button>
-            </div>
+            {!noMoreCities && (
+                <div className="towns-actions">
+                    <button
+                        type="button"
+                        onClick={handleLoadMore}
+                        disabled={isFetching}
+                        className="load-more-button"
+                    >
+                        {isFetching ? (
+                            <>
+                                <span className="spinner"></span>
+                                Загрузка...
+                            </>
+                        ) : (
+                            <>Показать ещё</>
+                        )}
+                    </button>
+                </div>
+            )}
+            
+            {noMoreCities && cities.length > 0 && (
+                <div className="towns-end-message">
+                    Показаны все города ({filteredCities.length})
+                </div>
+            )}
 
             {isLoading && cities.length === 0 && (
                 <div className="towns-loading">Загрузка...</div>
             )}
         </div>
     );
+
 };

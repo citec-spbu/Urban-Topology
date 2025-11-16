@@ -146,6 +146,31 @@
     cursor: not-allowed;
 }
 
+.spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(131, 0, 0, 0.3);
+    border-top-color: #830000;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { 
+        transform: rotate(360deg); 
+    }
+}
+
+.towns-end-message {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+    font-size: 14px;
+}
+
 .towns-loading,
 .towns-error {
     text-align: center;
