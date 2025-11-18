@@ -1,7 +1,7 @@
 import { useCities } from '@/entities/city'
 import type { City } from '@/shared/types'
 import type { FormEvent } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import './TownsPage.css'
 
@@ -22,7 +22,8 @@ export const TownsPage = () => {
         if (!search.trim()) return allCities;
 
         const lower = search.trim().toLowerCase();
-        return allCities.filter((city) => city.city_name.toLowerCase().includes(lower));
+        return allCities.filter((city)=>
+            city.city_name.toLowerCase().startsWith(lower));
     }, [allCities, search]);
 
     const displayedCities = filteredCities.slice(0, displayCount);
@@ -45,19 +46,18 @@ export const TownsPage = () => {
     return (
         <div className="towns-layout">
             <form className="towns-search" onSubmit={handleSubmit} role="search">
-                <input
-                    type="search"
-                    placeholder="Поиск"
-                    value={search}
-                    onChange={(event) => handleSearchChange(event.target.value)}
-                    aria-label="Поиск города"
-                />
-                <button type="submit" title="Найти город">
-                    <span className="material-symbols-outlined" aria-hidden="true">
+                <div className="search-input-wrapper">
+                    <span className="search-icon material-symbols-outlined" aria-hidden="true">
                         search
                     </span>
-                    <span className="sr-only">Поиск</span>
-                </button>
+                    <input
+                        type="search"
+                        placeholder="Поиск города"
+                        value={search}
+                        onChange={(event) => handleSearchChange(event.target.value)}
+                        aria-label="Поиск города"
+                    />
+                </div>
             </form>
 
             {error && (
