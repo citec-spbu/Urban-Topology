@@ -27,7 +27,8 @@ export const TownsPage = () => {
     const [search, setSearch] = useState('');
     const [displayCount, setDisplayCount] = useState(CITIES_PER_PAGE);
 
-    const {data: allCities = [], isLoading, error} = useCities(0, MAX_CITIES_TO_FETCH);
+    const {data: allCities = [], isLoading, error} = useCities(1, MAX_CITIES_TO_FETCH);
+
     const filteredCities = useMemo(() => {
         if (!search.trim()) return allCities;
 
