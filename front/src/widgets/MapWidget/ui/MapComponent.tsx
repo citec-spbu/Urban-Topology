@@ -65,6 +65,18 @@ const MapResizer: React.FC<{ active?: boolean }> = ({ active }) => {
     return null;
 };
 
+const RemoveLeafletPrefix: React.FC = () => {
+    const map = useMap();
+
+    useEffect(() => {
+        if (map?.attributionControl) {
+            map.attributionControl.setPrefix('');
+        }
+    }, [map]);
+
+    return null;
+};
+
 export const MapComponent: React.FC<MapComponentProps> = ({ center, regions, onGraphInfo, isActive }) => {
     return (
         <MapContainer
@@ -74,6 +86,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({ center, regions, onG
             className="leaflet-map"
             style={{ height: '100%', width: '100%' }}
         >
+            <RemoveLeafletPrefix />
             <MapResizer active={isActive} />
             <TileLayer
                 attribution='&copy; OpenStreetMap contributors'
