@@ -8,15 +8,12 @@
 }
 
 .towns-search {
-    position: sticky;
-    top: 0;
-    z-index: 10;
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
     padding: 12px;
-    background: rgba(255, 255, 255, 0.95);
+    background:transparent;
 }
 
 .search-input-wrapper {
@@ -25,19 +22,20 @@
     align-items: center;
     width: 100%;
     max-width: 600px;
-    background: #f1f3f4;
+    background-color: rgba(255, 255, 255, 0.8);
     border-radius: 24px;
     padding: 10px 16px;
-    transition: box-shadow 0.2s ease, background-color 0.2s ease;
+    transition: all 0.2s ease;
+    border: 1px solid rgba(200, 199, 196, 0.2);
 }
 
 .search-input-wrapper:focus-within {
-    background: white;
-    box-shadow: 0 1px 6px rgba(32, 33, 36, 0.28);
+    border-color: rgba(131, 0, 0, 0.3); 
+    box-shadow: 0 2px 8px rgba(131, 0, 0, 0.1);
 }
 
 .search-icon {
-    color: #5f6368;
+    color: #6b6a67;
     font-size: 20px;
     margin-right: 12px;
     flex-shrink: 0;
@@ -50,11 +48,11 @@
     font-size: 16px;
     background: transparent;
     padding: 0;
-    color: #202124;
+    color: #2a2927;
 }
 
 .search-input-wrapper input::placeholder {
-    color: #5f6368;
+    color: #9a9996;
 }
 
 .search-input-wrapper input::-webkit-search-cancel-button {
@@ -83,14 +81,17 @@
     text-decoration: none;
     color: inherit;
     border: 1px solid #777;
-    border-radius: 10px;
+    border-radius: 20px;
     overflow: hidden;
-    transition: box-shadow 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: box-shadow 0.3s ease;
     background: #fff;
 }
 
 .town-card:hover {
+    transform: translateY(-8px);
     box-shadow: 0 0 12px rgba(34, 60, 80, 0.2);
+    border-color: rgba(131, 0, 0, 0.2);
 }
 
 .town-card__image {
@@ -114,6 +115,7 @@
 .town-card__content h2 {
     margin: 0;
     font-size: 1.25rem;
+    font-weight: 600;
 }
 
 .town-card__download {
@@ -207,7 +209,6 @@
     border-width: 0;
 }
 
-/* .towns-search input:focus-visible, */
 .towns-search button:focus-visible,
 .towns-actions button:focus-visible,
 .town-card:focus-visible,
