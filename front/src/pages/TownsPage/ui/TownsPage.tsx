@@ -5,6 +5,7 @@ import {useMemo, useState} from 'react'
 import {Link} from 'react-router-dom'
 
 const CITIES_PER_PAGE = 15;
+const MAX_CITIES_TO_FETCH = 1000;
 const MAP_ZOOM = 11;
 
 const buildPreviewUrl = (city: City) => {
@@ -26,7 +27,7 @@ export const TownsPage = () => {
     const [search, setSearch] = useState('');
     const [displayCount, setDisplayCount] = useState(CITIES_PER_PAGE);
 
-    const {data: allCities = [], isFetching, isLoading, error} = useCities(0, 1000);
+    const {data: allCities = [], isLoading, error} = useCities(0, MAX_CITIES_TO_FETCH);
     const filteredCities = useMemo(() => {
         if (!search.trim()) return allCities;
 
@@ -52,6 +53,14 @@ export const TownsPage = () => {
         setDisplayCount(CITIES_PER_PAGE);
     };
 
+    if (error) {
+        return (
+            <div className="text-center py-10 px-5 text-[1.1rem] text-[#d32f2f]">
+                Не удалось загрузить города. Попробуйте обновить страницу.
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col gap-4 p-6 max-w-[1200px] mx-auto">
             <form className="flex items-center justify-center w-full py-3 bg-transparent" onSubmit={handleSubmit}
@@ -73,12 +82,6 @@ export const TownsPage = () => {
                     />
                 </div>
             </form>
-
-            {error && (
-                <div className="text-center py-10 px-5 text-[1.1rem] text-[#d32f2f]">
-                    Не удалось загрузить города. Попробуйте обновить страницу.
-                </div>
-            )}
 
             {isLoading ? (
                 <div className="text-center py-10 px-5 text-[1.1rem]">Загрузка городов...</div>
@@ -123,18 +126,9 @@ export const TownsPage = () => {
                             <button
                                 type="button"
                                 onClick={handleLoadMore}
-                                disabled={isFetching}
-                                className="px-8 py-3 text-[1rem] border border-[#bbb] bg-white text-[#222] rounded-md cursor-pointer transition-all duration-200 hover:bg-[#f5f5f5] hover:text-[#222] disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-8 py-3 text-[1rem] border border-[#bbb] bg-white text-[#222] rounded-md cursor-pointer transition-all duration-200 hover:bg-[#f5f5f5] hover:text-[#222]"
                             >
-                                {isFetching ? (
-                                    <>
-                                        <span
-                                            className="inline-block w-4 h-4 border-2 border-[#bbb] border-t-[#222] rounded-full animate-spin mr-2 align-middle"></span>
-                                        Загрузка...
-                                    </>
-                                ) : (
-                                    <>Показать ещё</>
-                                )}
+                                Показать ещё
                             </button>
                         </div>
                     )}

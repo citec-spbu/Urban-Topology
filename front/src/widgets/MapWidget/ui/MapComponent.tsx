@@ -67,11 +67,13 @@ const MapResizer: React.FC<{ active?: boolean }> = ({ active }) => {
 
 const RemoveLeafletPrefix: React.FC = () => {
     const map = useMap();
-    
+
     useEffect(() => {
-        map.attributionControl.setPrefix(''); // Убирает "Leaflet |"
+        if (map?.attributionControl) {
+            map.attributionControl.setPrefix('');
+        }
     }, [map]);
-    
+
     return null;
 };
 
@@ -94,5 +96,3 @@ export const MapComponent: React.FC<MapComponentProps> = ({ center, regions, onG
         </MapContainer>
     );
 };
-
-
