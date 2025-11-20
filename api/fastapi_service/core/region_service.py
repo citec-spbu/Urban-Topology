@@ -1,4 +1,4 @@
-"""Работа с региональными геоданными и их преобразованием в схемы."""
+"""Work with regional geodata and convert them into schemas."""
 
 from __future__ import annotations
 
@@ -36,7 +36,8 @@ def to_json_array(polygon) -> List[List[List[float]]]:
     return coordinates_list
 
 
-def region_to_schemas(regions: GeoDataFrame, ids_list: List[int], admin_level: int
+def region_to_schemas(
+    regions: GeoDataFrame, ids_list: List[int], admin_level: int
 ) -> List[RegionBase]:
     regions_list = []
     polygons = regions[regions["osm_id"].isin(ids_list)]
@@ -52,13 +53,15 @@ def region_to_schemas(regions: GeoDataFrame, ids_list: List[int], admin_level: i
     return regions_list
 
 
-def region_to_info_schemas(regions: GeoDataFrame, ids_list: List[int], admin_level: int) -> List[RegionInfoBase]:
+def region_to_info_schemas(
+    regions: GeoDataFrame, ids_list: List[int], admin_level: int
+) -> List[RegionInfoBase]:
     regions_list: List[RegionInfoBase] = []
-    polygons = regions[regions['osm_id'].isin(ids_list)]
+    polygons = regions[regions["osm_id"].isin(ids_list)]
     for _, row in polygons.iterrows():
         base = RegionInfoBase(
-            id=int(row['osm_id']),
-            name=row['local_name'],
+            id=int(row["osm_id"]),
+            name=row["local_name"],
             admin_level=admin_level,
         )
         regions_list.append(base)
@@ -84,9 +87,7 @@ def get_admin_levels(
     levels_str = cities[cities["Город"] == city_name]["admin_levels"].values[0]
     levels = ast.literal_eval(levels_str)
 
-    info = regions[regions["local_name"] == city_name].sort_values(
-        by="admin_level"
-    )
+    info = regions[regions["local_name"] == city_name].sort_values(by="admin_level")
     ids_list = [info["osm_id"].to_list()[0]]
 
     schemas = region_to_schemas(
@@ -106,21 +107,29 @@ def get_admin_levels(
     return regions_list
 
 
-def get_admin_levels_info(city_name: str, regions: GeoDataFrame, cities: DataFrame) -> List[RegionInfoBase]:
+def get_admin_levels_info(
+    city_name: str, regions: GeoDataFrame, cities: DataFrame
+) -> List[RegionInfoBase]:
     regions_list: List[RegionInfoBase] = []
 
-    levels_str = cities[cities['Город'] == city_name]['admin_levels'].values[0]
+    levels_str = cities[cities["Город"] == city_name]["admin_levels"].values[0]
     levels = ast.literal_eval(levels_str)
 
-    info = regions[regions['local_name'] == city_name].sort_values(by='admin_level')
-    ids_list = [info['osm_id'].to_list()[0]]
+    info = regions[regions["local_name"] == city_name].sort_values(by="admin_level")
+    ids_list = [info["osm_id"].to_list()[0]]
 
-    schemas = region_to_info_schemas(regions=regions, ids_list=ids_list, admin_level=levels[0])
+    schemas = region_to_info_schemas(
+        regions=regions, ids_list=ids_list, admin_level=levels[0]
+    )
     regions_list.extend(schemas)
     for level in levels:
-        ids_list, data_valid = children(ids_list=ids_list, admin_level=level, regions=regions)
+        ids_list, data_valid = children(
+            ids_list=ids_list, admin_level=level, regions=regions
+        )
         if data_valid:
-            schemas = region_to_info_schemas(regions=regions, ids_list=ids_list, admin_level=level)
+            schemas = region_to_info_schemas(
+                regions=regions, ids_list=ids_list, admin_level=level
+            )
             regions_list.extend(schemas)
 
     return regions_list
@@ -133,11 +142,11 @@ def list_to_polygon(polygons: List[List[List[float]]]):
 def polygons_from_region(regions_ids: List[int], regions: GeoDataFrame):
     if len(regions_ids) == 0:
         return None
-    polygons = regions[regions['osm_id'].isin(regions_ids)]
+    polygons = regions[regions["osm_id"].isin(regions_ids)]
     if polygons is None or len(polygons) == 0:
         return None
     try:
-        union_geom = unary_union([geom for geom in polygons['geometry'].values])
+        union_geom = unary_union([geom for geom in polygons["geometry"].values])
     except Exception:
         return None
     try:
@@ -148,28 +157,36 @@ def polygons_from_region(regions_ids: List[int], regions: GeoDataFrame):
     return union_geom
 
 
-async def get_regions(city_id: int, regions: GeoDataFrame, cities: DataFrame) -> Optional[List[RegionBase]]:
-    """Находит город и собирает список полигонов по административным уровням."""
+async def get_regions(
+    city_id: int, regions: GeoDataFrame, cities: DataFrame
+) -> Optional[List[RegionBase]]:
+    """Find the city and assemble polygons for every administrative level."""
     repo = CityRepository()
     city = await repo.by_id(city_id)
     if city is None:
         return None
 
-    city_name = city["city_name"] if "city_name" in city else getattr(city, "city_name", None)
+    city_name = (
+        city["city_name"] if "city_name" in city else getattr(city, "city_name", None)
+    )
     if city_name is None:
         return None
 
     return get_admin_levels(city_name=city_name, regions=regions, cities=cities)
 
 
-async def get_regions_info(city_id: int, regions: GeoDataFrame, cities: DataFrame) -> Optional[List[RegionInfoBase]]:
-    """Возвращает метаданные районов без геометрии для выбранного города."""
+async def get_regions_info(
+    city_id: int, regions: GeoDataFrame, cities: DataFrame
+) -> Optional[List[RegionInfoBase]]:
+    """Return district metadata without geometry for the specified city."""
     repo = CityRepository()
     city = await repo.by_id(city_id)
     if city is None:
         return None
 
-    city_name = city["city_name"] if "city_name" in city else getattr(city, "city_name", None)
+    city_name = (
+        city["city_name"] if "city_name" in city else getattr(city, "city_name", None)
+    )
     if city_name is None:
         return None
 

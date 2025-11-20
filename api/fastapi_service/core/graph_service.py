@@ -1,8 +1,7 @@
-"""Сборка графа по выбранному региону и расчёт метрик центральности."""
+"""Build a graph for a selected region and compute centrality metrics."""
 
 import asyncio
 import logging
-from pathlib import Path
 from typing import List
 
 import networkx as nx
@@ -15,9 +14,11 @@ from core.converters import (
     record_obj_to_pprop,
 )
 from core.ingestion_utils import add_graph_to_db
+from core.paths import city_pbf_path
 
 
 logger = logging.getLogger(__name__)
+
 
 async def graph_from_poly(city_id, polygon):
     repo_city = CityRepository()
@@ -26,8 +27,8 @@ async def graph_from_poly(city_id, polygon):
         return None, None, None, None, None
 
     if not city.downloaded:
-        city_name = city['city_name']
-        pbf_path = Path("./data/cities_osm") / f"{city_name}.pbf"
+        city_name = city["city_name"]
+        pbf_path = city_pbf_path(city_name)
 
         if not pbf_path.exists():
             logger.warning(
@@ -72,7 +73,7 @@ async def graph_from_poly(city_id, polygon):
 
     repo_graph = GraphRepository()
 
-    # Получаем идентификаторы нужных свойств
+    # Fetch property identifiers required for graph queries
     prop_id_name = await repo_graph.property_id("name")
     prop_id_highway = await repo_graph.property_id("highway")
 
@@ -90,14 +91,22 @@ async def graph_from_poly(city_id, polygon):
         )
         return None, None, None, None, None
 
-    # Выбираем точки внутри полигона (PostGIS)
+    # Retrieve points inside the polygon (PostGIS)
     res_points = await repo_graph.points_in_polygon(city_id, polygon_wkt)
     points = list(map(point_obj_to_list, res_points))
 
-    # Фильтруем рёбра по полигону и типам дорог (PostGIS)
+    # Filter edges by polygon bounds and road types (PostGIS)
     road_types = (
-        'motorway', 'trunk', 'primary', 'secondary', 'tertiary',
-        'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link'
+        "motorway",
+        "trunk",
+        "primary",
+        "secondary",
+        "tertiary",
+        "motorway_link",
+        "trunk_link",
+        "primary_link",
+        "secondary_link",
+        "tertiary_link",
     )
     res_edges = await repo_graph.edges_in_polygon(
         city_id=city_id,
@@ -110,7 +119,7 @@ async def graph_from_poly(city_id, polygon):
     )
     edges = list(map(edge_obj_to_list, res_edges))
 
-    # Собираем идентификаторы свойств
+    # Collect property identifiers from selected entities
     ways_prop_ids = {e[1] for e in edges}
     points_prop_ids = {p[0] for p in points}
 
@@ -127,13 +136,15 @@ async def graph_from_poly(city_id, polygon):
 
 
 async def calc_metrics(points, edges, oneway_ids):
-    # Пустой граф — возвращаем пустой результат
+    # Empty graph means no metrics to compute
     if not points:
         return []
 
     points_list = [point[0] for point in points]
     edges_list = [(edge[2], edge[3]) for edge in edges]
-    reversed_edges_list = [(edge[3], edge[2]) for edge in edges if edge[1] not in oneway_ids]
+    reversed_edges_list = [
+        (edge[3], edge[2]) for edge in edges if edge[1] not in oneway_ids
+    ]
 
     G = nx.DiGraph()
     G.add_nodes_from(points_list)
@@ -170,7 +181,9 @@ async def calc_metrics(points, edges, oneway_ids):
         node_betweenness = betweenness_dict[node_id]
         normalized_betweenness = node_betweenness / adjusted_max_betweenness
         radius = get_radius_based_on_metric(normalized_betweenness)
-        color = get_color_from_blue_to_red(node_betweenness, min_betweenness, max_betweenness)
+        color = get_color_from_blue_to_red(
+            node_betweenness, min_betweenness, max_betweenness
+        )
 
         metrics_list.append(
             [

@@ -19,10 +19,11 @@ from datetime import datetime
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Этап запуска — загружаем необходимые файлы данных
+    """Preload shared datasets and manage DB connectivity for the FastAPI lifecycle."""
+    # Startup phase — preload required data files
     data_dir = Path(os.environ.get("DATA_DIR", "./data"))
 
-    # Загружаем GeoJSON с регионами
+    # Load GeoJSON with region boundaries
     regions_file = data_dir / "regions.json"
     if not regions_file.exists():
         error_msg = f"Required data file not found: {regions_file.absolute()}"
@@ -37,7 +38,7 @@ async def lifespan(app: FastAPI):
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-    # Загружаем CSV со списком городов
+    # Load CSV with the list of supported cities
     cities_file = data_dir / "cities.csv"
     if not cities_file.exists():
         error_msg = f"Required data file not found: {cities_file.absolute()}"
@@ -52,14 +53,14 @@ async def lifespan(app: FastAPI):
         logger.error(error_msg)
         raise RuntimeError(error_msg) from e
 
-    # Подключаемся к базе данных
+    # Prepare DB connection and bootstrap reference data
     await database.connect()
     services.init_db(cities_info=app.state.cities_info)
     logger.info("Database connected and initialized")
 
     yield
 
-    # Этап остановки — закрываем соединение с БД
+    # Shutdown phase — close DB connection
     await database.disconnect()
     logger.info("Database disconnected")
 
@@ -89,6 +90,7 @@ if __name__ == "__main__":
 @app.get("/api/city/", response_model=CityBase)
 @logger.catch(exclude=HTTPException)
 async def get_city(city_id: int):
+    """Return metadata for a single city by identifier."""
     request = f"GET /api/city?city_id={city_id}"
     status_code = 200
     detail = "OK"
@@ -107,6 +109,7 @@ async def get_city(city_id: int):
 @app.get("/api/cities/", response_model=List[CityBase])
 @logger.catch(exclude=HTTPException)
 async def get_cities(page: int = Query(ge=0), per_page: int = Query(gt=0)):
+    """List cities with pagination."""
     request = f"GET /api/cities?page={page}&per_page={per_page}/"
     status_code = 200
     detail = "OK"
@@ -122,11 +125,14 @@ async def get_cities(page: int = Query(ge=0), per_page: int = Query(gt=0)):
 @app.get("/api/regions/city/", response_model=List[RegionBase])
 @logger.catch(exclude=HTTPException)
 async def city_regions(city_id: int):
+    """Return regions linked to the specified city."""
     request = f"GET /api/regions/city?city_id={city_id}/"
     status_code = 200
     detail = "OK"
 
-    regions = await services.get_regions(city_id=city_id, regions=app.state.regions_df, cities=app.state.cities_info)
+    regions = await services.get_regions(
+        city_id=city_id, regions=app.state.regions_df, cities=app.state.cities_info
+    )
     if regions is None:
         status_code = 404
         detail = "NOT FOUND"
@@ -142,6 +148,7 @@ async def city_regions(city_id: int):
 async def city_graph(
     city_id: int, regions_ids: List[int] = Body(...), use_cache: bool = True
 ):
+    """Build a graph for selected regions of the given city with optional caching."""
     request = f"POST /api/city/graph/region/?city_id={city_id} regions_ids={regions_ids} (body)"
     status_code = 200
     detail = "OK"
@@ -151,12 +158,12 @@ async def city_graph(
 
         regions_key = "_".join(map(str, sorted(regions_ids)))
         cache_response_file_path = f"./data/caches/{city_id}_{regions_key}.json"
-    # Пытаемся вернуть валидный ответ из кэша
+        # Attempt to serve a cached graph response when available
         if use_cache and os.path.exists(cache_response_file_path):
             try:
                 with open(cache_response_file_path, "r") as f:
                     cached = json.load(f)
-                # Возвращаем только валидный кэш (ожидаем словарь с нужными полями)
+                # Only use cache entries that contain the expected payload
                 required = {
                     "edges_csv",
                     "points_csv",
@@ -167,16 +174,16 @@ async def city_graph(
                 if isinstance(cached, dict) and required.issubset(cached.keys()):
                     return cached
                 else:
-                    logger.warning(f"Ignore invalid cache file: {cache_response_file_path}")
+                    logger.warning(
+                        f"Ignore invalid cache file: {cache_response_file_path}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to read cache {cache_response_file_path}: {e}")
 
-    # Если подходящего кэша нет — собираем граф заново
-        print(f"{datetime.now()} graph_from_ids begin")
+        # Fall back to fresh graph computation when cache is unavailable
         points, edges, pprop, wprop, metrics = await services.graph_from_ids(
             city_id=city_id, regions_ids=regions_ids, regions=app.state.regions_df
         )
-        print(f"{datetime.now()} graph_from_ids end")
 
         if points is None:
             status_code = 404
@@ -184,7 +191,7 @@ async def city_graph(
             logger.error(f"{request} {status_code} {detail}")
             raise HTTPException(status_code=status_code, detail=detail)
 
-    # Проверяем, что граф действительно содержит данные
+        # Ensure the resulting graph is not empty before returning it
         if len(points) == 0 or len(edges) == 0:
             status_code = 422
             detail = (
@@ -194,15 +201,17 @@ async def city_graph(
             logger.error(f"{request} {status_code} {detail}")
             raise HTTPException(status_code=status_code, detail=detail)
 
-    # Формируем Pydantic-модель результата
+        # Build the Pydantic-friendly response object
         graphBase = services.graph_to_scheme(points, edges, pprop, wprop, metrics)
 
-    # Готовим данные к сериализации
+        # Convert response to a serializable dict
         data = (
-            graphBase.model_dump() if hasattr(graphBase, "model_dump") else graphBase.dict()
+            graphBase.model_dump()
+            if hasattr(graphBase, "model_dump")
+            else graphBase.dict()
         )
 
-    # Пытаемся атомарно записать кэш; ошибка записи не должна ломать ответ
+        # Persist cache atomically; failures should not break the request
         try:
             import tempfile
 
@@ -219,10 +228,10 @@ async def city_graph(
         logger.info(f"{request} {status_code} {detail}")
         return graphBase
     except HTTPException:
-    # Исключения FastAPI повторно выбрасываем без изменений
+        # Re-raise FastAPI HTTP errors unchanged
         raise
     except Exception as e:
-    # Ловим прочие ошибки и формируем подробное сообщение
+        # Capture unexpected errors and include context in the log
         status_code = 500
         error_type = type(e).__name__
         error_msg = str(e)
@@ -234,6 +243,7 @@ async def city_graph(
 @app.post("/api/city/graph/bbox/{city_id}/", response_model=GraphBase)
 @logger.catch(exclude=HTTPException)
 async def city_graph_poly(city_id: int, polygons_as_list: List[List[List[float]]]):
+    """Build a graph based on an explicit polygon payload."""
     request = f"POST /api/city/graph/bbox/{city_id}/"
     status_code = 200
     detail = "OK"

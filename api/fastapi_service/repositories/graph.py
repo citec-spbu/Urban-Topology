@@ -1,12 +1,13 @@
-# Репозиторий для работы с графами в api/fastapi_service
-from typing import Iterable, Sequence, Optional
+from typing import Iterable, Sequence
 from sqlalchemy import text
 from database import database, engine
 
+
 class GraphRepository:
-    async def points_in_bbox(self, city_id: int, bbox: tuple[float, float, float, float]) -> Sequence[tuple]:
-        q = (
-            """
+    async def points_in_bbox(
+        self, city_id: int, bbox: tuple[float, float, float, float]
+    ) -> Sequence[tuple]:
+        q = """
             SELECT p.id, p.longitude, p.latitude
             FROM "Points" p
             JOIN "Edges" e ON e.id_src = p.id
@@ -15,26 +16,34 @@ class GraphRepository:
               AND p.longitude BETWEEN :min_lon AND :max_lon
               AND p.latitude  BETWEEN :min_lat AND :max_lat
             """
+        return await database.fetch_all(
+            q,
+            values={
+                "city_id": city_id,
+                "min_lon": bbox[0],
+                "min_lat": bbox[1],
+                "max_lon": bbox[2],
+                "max_lat": bbox[3],
+            },
         )
-        return await database.fetch_all(q, values={
-            "city_id": city_id,
-            "min_lon": bbox[0], "min_lat": bbox[1],
-            "max_lon": bbox[2], "max_lat": bbox[3],
-        })
 
     async def property_id(self, name: str) -> int:
-    # Используем строковый SQL вместо text(), т.к. fetch_one с TextClause падает на некоторых версиях "databases"
+        # Use raw SQL here because fetch_one + TextClause crashes on some databases versions
         row = await database.fetch_one(
-            'SELECT id FROM "Properties" WHERE property = :name',
-            values={"name": name}
+            'SELECT id FROM "Properties" WHERE property = :name', values={"name": name}
         )
         return None if row is None else row.id
 
-    async def edges_in_bbox(self, city_id: int, bbox, prop_id_name: int, prop_id_highway: int,
-                            highway_types: Iterable[str]) -> Sequence[tuple]:
-    # :types — массив строк
-        q = (
-            """
+    async def edges_in_bbox(
+        self,
+        city_id: int,
+        bbox,
+        prop_id_name: int,
+        prop_id_highway: int,
+        highway_types: Iterable[str],
+    ) -> Sequence[tuple]:
+        # :types parameter contains an array of highway strings
+        q = """
             WITH named_streets AS (
                 SELECT e.id, e.id_way, e.id_src, e.id_dist, wp_n.value AS value
                 FROM "Edges" e
@@ -64,66 +73,80 @@ class GraphRepository:
             UNION
             SELECT id, id_way, id_src, id_dist, value FROM unnamed_streets
             """
+        return await database.fetch_all(
+            q,
+            values={
+                "city_id": city_id,
+                "min_lon": bbox[0],
+                "min_lat": bbox[1],
+                "max_lon": bbox[2],
+                "max_lat": bbox[3],
+                "prop_id_name": prop_id_name,
+                "prop_id_hw": prop_id_highway,
+                "types": list(highway_types),
+            },
         )
-        return await database.fetch_all(q, values={
-            "city_id": city_id,
-            "min_lon": bbox[0], "min_lat": bbox[1],
-            "max_lon": bbox[2], "max_lat": bbox[3],
-            "prop_id_name": prop_id_name,
-            "prop_id_hw": prop_id_highway,
-            "types": list(highway_types),
-        })
 
     async def way_props(self, way_ids: Iterable[int]) -> Sequence[tuple]:
         ids = list(way_ids)
         if not ids:
             return []
-        q = (
-            """
+        q = """
             SELECT wp.id_way AS id_way, p.property, wp.value
             FROM "WayProperties" wp
             JOIN "Properties" p ON p.id = wp.id_property
             WHERE wp.id_way = ANY(:ids)
             """
-        )
         return await database.fetch_all(q, values={"ids": ids})
 
     def point_props_via_temp(self, point_ids: Iterable[int]) -> Sequence[tuple]:
-    # Как и раньше, создаём временную таблицу, но изолируем логику внутри репозитория
+        # Create a temporary table here so repository clients do not deal with raw SQL
         ids = list(point_ids)
         if not ids:
             return []
         with engine.begin() as conn:
-            conn.execute(text("CREATE TEMPORARY TABLE temp_ids_point (id_point BIGINT PRIMARY KEY);"))
-            conn.execute(text("INSERT INTO temp_ids_point (id_point) VALUES " + ",".join(f"({i})" for i in ids)))
-            rows = conn.execute(text("""
+            conn.execute(
+                text(
+                    "CREATE TEMPORARY TABLE temp_ids_point (id_point BIGINT PRIMARY KEY);"
+                )
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO temp_ids_point (id_point) VALUES "
+                    + ",".join(f"({i})" for i in ids)
+                )
+            )
+            rows = conn.execute(
+                text(
+                    """
                 SELECT pp.id_point, p.property, pp.value
                 FROM "PointProperties" pp
                 JOIN temp_ids_point t ON t.id_point = pp.id_point
                 JOIN "Properties" p ON p.id = pp.id_property
-            """)).fetchall()
+            """
+                )
+            ).fetchall()
             conn.execute(text("DROP TABLE temp_ids_point;"))
             return rows
 
     async def oneway_ids(self, city_id: int) -> list[int]:
-        q = (
-            """
+        q = """
             SELECT DISTINCT wp.id_way
             FROM "WayProperties" wp
             JOIN "Properties" p ON p.id = wp.id_property
             JOIN "Ways" w ON w.id = wp.id_way
             WHERE p.property = 'oneway' AND wp.value = 'yes' AND w.id_city = :city_id
             """
-        )
         rows = await database.fetch_all(q, values={"city_id": city_id})
         return [r[0] for r in rows]
 
-    async def points_in_polygon(self, city_id: int, polygon_wkt: str) -> Sequence[tuple]:
+    async def points_in_polygon(
+        self, city_id: int, polygon_wkt: str
+    ) -> Sequence[tuple]:
         """
         Return points whose lon/lat fall within the provided polygon (WKT, SRID 4326).
         """
-        q = (
-            """
+        q = """
             WITH poly AS (
                 SELECT ST_GeomFromText(:wkt, 4326) AS g
             )
@@ -135,8 +158,9 @@ class GraphRepository:
             WHERE w.id_city = :city_id
               AND ST_Within(ST_SetSRID(ST_MakePoint(p.longitude, p.latitude), 4326), poly.g)
             """
+        return await database.fetch_all(
+            q, values={"wkt": polygon_wkt, "city_id": city_id}
         )
-        return await database.fetch_all(q, values={"wkt": polygon_wkt, "city_id": city_id})
 
     async def edges_in_polygon(
         self,
@@ -161,7 +185,7 @@ class GraphRepository:
              AND ST_Within(ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326), poly.g))
         """
         if not require_both_endpoints and use_midpoint:
-            # Вариант с проверкой середины ребра внутри полигона
+            # Alternative: ensure only the segment midpoint is inside the polygon
             condition = """
                 ST_Within(
                     ST_LineInterpolatePoint(
@@ -175,7 +199,7 @@ class GraphRepository:
                 )
             """
         elif use_midpoint:
-            # Вариант с двумя концами или серединой внутри полигона
+            # Alternative: either both endpoints or the midpoint must stay inside
             condition = """
                 (
                     (ST_Within(ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326), poly.g)
@@ -196,8 +220,7 @@ class GraphRepository:
                 )
             """
 
-        q = (
-            f"""
+        q = f"""
             WITH poly AS (
                 SELECT ST_GeomFromText(:wkt, 4326) AS g
             ),
@@ -232,11 +255,13 @@ class GraphRepository:
             UNION
             SELECT id, id_way, id_src, id_dist, value FROM unnamed
             """
+        return await database.fetch_all(
+            q,
+            values={
+                "wkt": polygon_wkt,
+                "city_id": city_id,
+                "prop_id_name": prop_id_name,
+                "prop_id_hw": prop_id_highway,
+                "types": list(highway_types),
+            },
         )
-        return await database.fetch_all(q, values={
-            "wkt": polygon_wkt,
-            "city_id": city_id,
-            "prop_id_name": prop_id_name,
-            "prop_id_hw": prop_id_highway,
-            "types": list(highway_types),
-        })

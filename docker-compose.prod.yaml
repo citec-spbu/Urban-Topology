@@ -29,8 +29,8 @@ services:
         source: logsvol
         target: /app/logs
       - type: bind
-        source: ./api/cities_osm
-        target: /app/fastapi_service/data/cities_osm
+        source: ./cities_pbf
+        target: /cities_pbf
     restart: unless-stopped
     depends_on:
       - postgres

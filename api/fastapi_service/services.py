@@ -1,15 +1,14 @@
-"""Фасад, который собирает сервисы ядра и экспортирует их в старый API."""
+"""Facade that gathers core services and re-exports them for the legacy API layer."""
+
 from database import SessionLocal
 from geopandas.geodataframe import GeoDataFrame
 from typing import List, TYPE_CHECKING
-from datetime import datetime
-import subprocess
 
 import logging
 
 from core.converters import graph_to_scheme
 from core.city_service import get_city, get_cities
-from core.graph_service import graph_from_poly, calc_metrics
+from core.graph_service import graph_from_poly
 from core.region_service import (
     list_to_polygon,
     polygons_from_region,
@@ -26,35 +25,35 @@ from core.ingestion_utils import (
     init_db,
 )
 
-# Собираем публичный API, чтобы старые импорты из services продолжали работать
+# Public API surface preserved for compatibility with the legacy imports
 __all__ = [
-    'AUTH_FILE_PATH',
-    'add_city_to_db',
-    'add_graph_to_db',
-    'add_info_to_db',
-    'add_point_to_db',
-    'add_property_to_db',
-    'get_db',
-    'get_city',
-    'get_cities',
-    'get_regions',
-    'get_regions_info',
-    'graph_from_ids',
-    'graph_to_scheme',
-    'init_db',
-    'list_to_polygon',
-    'polygons_from_region',
+    "AUTH_FILE_PATH",
+    "add_city_to_db",
+    "add_graph_to_db",
+    "add_info_to_db",
+    "add_point_to_db",
+    "add_property_to_db",
+    "get_db",
+    "get_city",
+    "get_cities",
+    "get_regions",
+    "get_regions_info",
+    "graph_from_ids",
+    "graph_to_scheme",
+    "init_db",
+    "list_to_polygon",
+    "polygons_from_region",
 ]
 
-# Создайте или получите корневой логгер SQLAlchemy, установите уровень WARNING
+# Configure the root SQLAlchemy logger so it stays quiet by default
 log = logging.getLogger("sqlalchemy.engine")
 log.setLevel(logging.WARNING)
 
-# Убедитесь, что обработчик лога убран, если он уже установлен
+# Drop existing handlers to avoid duplicate output
 if log.hasHandlers():
     log.handlers.clear()
 
-# Если вы хотите полностью убрать любой вывод, вы можете добавить "глушитель":
+# Attach a null handler to silence messages in production
 log.addHandler(logging.NullHandler())
 
 
@@ -63,6 +62,7 @@ if TYPE_CHECKING:
 
 
 def get_db():
+    """FastAPI dependency that yields a database session."""
     db = SessionLocal()
     try:
         yield db
@@ -70,14 +70,11 @@ def get_db():
         db.close()
 
 
-async def graph_from_ids(city_id : int, regions_ids : List[int], regions : GeoDataFrame):
-    print(f"{datetime.now()} polygons_from_region begin")
+async def graph_from_ids(city_id: int, regions_ids: List[int], regions: GeoDataFrame):
+    """Resolve region polygons by id list and delegate graph building to core services."""
     polygon = polygons_from_region(regions_ids=regions_ids, regions=regions)
-    print(f"{datetime.now()} polygons_from_region end")
-    if polygon == None:
+    if polygon is None:
         return None, None, None, None, None
-    print(f"{datetime.now()} graph_from_poly begin")
-    gfp = await graph_from_poly(city_id=city_id, polygon=polygon)
-    print(f"{datetime.now()} graph_from_poly end")
-    return gfp
 
+    gfp = await graph_from_poly(city_id=city_id, polygon=polygon)
+    return gfp

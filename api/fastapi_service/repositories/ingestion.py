@@ -14,12 +14,18 @@ logger = logging.getLogger(__name__)
 
 
 class IngestionRepository:
+    """Low-level data access helpers for importing OSM-derived city graphs."""
+
     def find_city_by_name(self, city_name: str) -> Optional[object]:
+        """Return a city row if it already exists."""
         with engine.connect() as conn:
             q = CityAsync.select().where(CityAsync.c.city_name == city_name)
             return conn.execute(q).first()
 
-    def create_city_property(self, *, latitude: float, longitude: float, population: int, time_zone: str) -> int:
+    def create_city_property(
+        self, *, latitude: float, longitude: float, population: int, time_zone: str
+    ) -> int:
+        """Insert a CityProperty record and return its id."""
         with SessionLocal.begin() as session:
             prop = CityProperty(
                 c_latitude=latitude,
@@ -32,6 +38,7 @@ class IngestionRepository:
             return prop.id
 
     def create_city(self, *, city_name: str, property_id: int) -> int:
+        """Insert a City row pointing to the provided property id."""
         with SessionLocal.begin() as session:
             city = City(city_name=city_name, id_property=property_id)
             session.add(city)
@@ -39,10 +46,16 @@ class IngestionRepository:
             return city.id
 
     def mark_downloaded(self, city_id: int) -> None:
+        """Mark the city as downloaded after successful ingestion."""
         with engine.begin() as conn:
-            conn.execute(update(CityAsync).where(CityAsync.c.id == city_id).values(downloaded=True))
+            conn.execute(
+                update(CityAsync)
+                .where(CityAsync.c.id == city_id)
+                .values(downloaded=True)
+            )
 
     def apply_osmosis_schema(self) -> None:
+        """Load the Osmosis PostgreSQL schema via psql."""
         try:
             result = subprocess.run(
                 [
@@ -74,6 +87,7 @@ class IngestionRepository:
         required_road_types: tuple[str, ...],
         city_name: str,
     ) -> None:
+        """Filter the original PBF and load the result into PostgreSQL tables."""
         base = Path(file_path)
         stem = base.name
         for suf in (".osm.pbf", ".pbf"):
@@ -91,19 +105,28 @@ class IngestionRepository:
             subprocess.run(
                 [
                     "/osmosis/bin/osmosis",
-                    "--read-pbf-fast", f"file={file_path}",
-                    "--tf", f"accept-ways", f"highway={types}",
-                    "--tf", "reject-ways", "side_road=yes",
+                    "--read-pbf-fast",
+                    f"file={file_path}",
+                    "--tf",
+                    "accept-ways",
+                    f"highway={types}",
+                    "--tf",
+                    "reject-ways",
+                    "side_road=yes",
                     "--used-node",
-                    "--write-pbf", "omitmetadata=true", f"file={road_file_path}",
+                    "--write-pbf",
+                    "omitmetadata=true",
+                    f"file={road_file_path}",
                 ],
                 check=True,
             )
             subprocess.run(
                 [
                     "/osmosis/bin/osmosis",
-                    "--read-pbf-fast", f"file={road_file_path}",
-                    "--write-pgsimp", f"authFile={auth_file_path}",
+                    "--read-pbf-fast",
+                    f"file={road_file_path}",
+                    "--write-pgsimp",
+                    f"authFile={auth_file_path}",
                 ],
                 check=True,
             )
@@ -114,31 +137,39 @@ class IngestionRepository:
                 os.remove(road_file_path)
             except OSError:
                 pass
+
     def fill_city_graph_from_osm_tables(self, *, city_id: int) -> None:
+        """Copy data from Osmosis tables into application-specific structures."""
         with engine.begin() as conn:
-            # Заполняем таблицу "Ways"
-            conn.execute(text(
-                """
+            # Populate "Ways"
+            conn.execute(
+                text(
+                    """
                 INSERT INTO "Ways" (id, id_city)
                 SELECT w.id, :city_id
                 FROM ways w;
                 """
-            ), {"city_id": city_id})
+                ),
+                {"city_id": city_id},
+            )
 
-            # Добавляем точки в таблицу "Points"
-            conn.execute(text(
-                """
+            # Populate "Points"
+            conn.execute(
+                text(
+                    """
                 INSERT INTO "Points" (id, longitude, latitude)
                 SELECT DISTINCT n.id, ST_X(n.geom) AS longitude, ST_Y(n.geom) AS latitude
                 FROM nodes n
                 JOIN way_nodes wn ON wn.node_id = n.id
                 JOIN "Ways" w ON w.id = wn.way_id;
                 """
-            ))
+                )
+            )
 
-            # Свойства (уникальные ключи из узлов и путей)
-            conn.execute(text(
-                """
+            # Insert unique property keys collected from nodes and ways
+            conn.execute(
+                text(
+                    """
                 INSERT INTO "Properties" (property)
                 SELECT DISTINCT k AS property
                 FROM (
@@ -148,33 +179,39 @@ class IngestionRepository:
                 ) keys
                 WHERE NOT EXISTS (SELECT 1 FROM "Properties" pr WHERE keys.k = pr.property);
                 """
-            ))
+                )
+            )
 
-            # Свойства путей
-            conn.execute(text(
-                """
+            # Map way tag values to "WayProperties"
+            conn.execute(
+                text(
+                    """
                 INSERT INTO "WayProperties" (id_way, id_property, value)
                 SELECT wt.way_id, p.id, wt.v
                 FROM way_tags wt
                 JOIN "Ways" w ON w.id = wt.way_id
                 JOIN "Properties" p ON LOWER(TRIM(p.property)) = LOWER(TRIM(wt.k));
                 """
-            ))
+                )
+            )
 
-            # Свойства точек
-            conn.execute(text(
-                """
+            # Map node tag values to "PointProperties"
+            conn.execute(
+                text(
+                    """
                 INSERT INTO "PointProperties" (id_point, id_property, value)
                 SELECT nt.node_id, pr.id, nt.v
                 FROM node_tags nt
                 JOIN "Points" pt ON pt.id = nt.node_id
                 JOIN "Properties" pr ON LOWER(TRIM(pr.property)) = LOWER(TRIM(nt.k));
                 """
-            ))
+                )
+            )
 
-            # Рёбра для односторонних дорог
-            conn.execute(text(
-                """
+            # Insert directed edges for one-way streets
+            conn.execute(
+                text(
+                    """
                 INSERT INTO "Edges" (id_way, id_src, id_dist)
                 SELECT wn.way_id, wn.node_id, wn2.node_id
                 FROM "Ways" w
@@ -184,11 +221,13 @@ class IngestionRepository:
                 WHERE wt.k LIKE 'oneway' AND wt.v LIKE 'yes' AND wn.sequence_id + 1 = wn2.sequence_id
                 ORDER BY wn.sequence_id;
                 """
-            ))
+                )
+            )
 
-            # Рёбра двусторонних дорог (прямое направление)
-            conn.execute(text(
-                """
+            # Insert forward edges for bidirectional streets
+            conn.execute(
+                text(
+                    """
                 WITH oneway_way_id AS (
                     SELECT w.id FROM ways w JOIN way_tags wt ON wt.way_id = w.id
                     WHERE wt.k LIKE 'oneway' AND wt.v LIKE 'yes'
@@ -202,11 +241,13 @@ class IngestionRepository:
                   AND wn.sequence_id + 1 = wn2.sequence_id
                 ORDER BY wn.sequence_id;
                 """
-            ))
+                )
+            )
 
-            # Рёбра двусторонних дорог (обратное направление)
-            conn.execute(text(
-                """
+            # Insert reverse edges for bidirectional streets
+            conn.execute(
+                text(
+                    """
                 WITH oneway_way_id AS (
                     SELECT w.id FROM ways w JOIN way_tags wt ON wt.way_id = w.id
                     WHERE wt.k LIKE 'oneway' AND wt.v LIKE 'yes'
@@ -220,7 +261,8 @@ class IngestionRepository:
                   AND wn.sequence_id + 1 = wn2.sequence_id
                 ORDER BY wn2.sequence_id DESC;
                 """
-            ))
+                )
+            )
 
     def import_city_graph(
         self,
@@ -231,6 +273,7 @@ class IngestionRepository:
         auth_file_path: str,
         required_road_types: tuple[str, ...],
     ) -> None:
+        """Run the entire ingestion pipeline for a city."""
         self.apply_osmosis_schema()
         self.run_osmosis_and_load(
             file_path=file_path,

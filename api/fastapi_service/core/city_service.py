@@ -1,4 +1,4 @@
-"""Утилиты для чтения городов из репозитория и приведения их к схемам."""
+"""Helpers that load cities from the repository and convert them to schemas."""
 
 from typing import List, Optional, Mapping, Any
 
@@ -7,8 +7,10 @@ from repositories import CityRepository
 from schemas import CityBase, PropertyBase
 
 
-async def property_to_scheme(prop: Optional[Mapping[str, Any]]) -> Optional[PropertyBase]:
-    """Преобразует запись из БД о свойствах города в Pydantic-схему."""
+async def property_to_scheme(
+    prop: Optional[Mapping[str, Any]],
+) -> Optional[PropertyBase]:
+    """Convert a raw city property record into a Pydantic schema."""
     if prop is None:
         return None
 
@@ -25,11 +27,13 @@ async def property_to_scheme(prop: Optional[Mapping[str, Any]]) -> Optional[Prop
 
 
 async def city_to_scheme(city: Optional[Mapping[str, Any]]) -> Optional[CityBase]:
-    """Дополняет DTO города связанными свойствами и возвращает CityBase."""
+    """Attach property data to the city DTO and return a CityBase."""
     if city is None:
         return None
 
-    city_base = CityBase(id=city["id"], city_name=city["city_name"], downloaded=city["downloaded"])
+    city_base = CityBase(
+        id=city["id"], city_name=city["city_name"], downloaded=city["downloaded"]
+    )
     repo = CityRepository()
     prop = await repo.property_by_city(city["id_property"])
     city_base.property = await property_to_scheme(prop=prop)
@@ -37,7 +41,7 @@ async def city_to_scheme(city: Optional[Mapping[str, Any]]) -> Optional[CityBase
 
 
 async def cities_to_scheme_list(cities: List[City]) -> List[CityBase]:
-    """Проходит по списку городов и собирает список схем."""
+    """Convert every city in the list into its schema representation."""
     return [await city_to_scheme(city=city) for city in cities]
 
 
@@ -51,4 +55,3 @@ async def get_city(city_id: int) -> Optional[CityBase]:
     repo = CityRepository()
     city = await repo.by_id(city_id)
     return await city_to_scheme(city=city)
-
