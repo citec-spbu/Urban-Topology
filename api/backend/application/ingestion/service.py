@@ -2,8 +2,8 @@ from typing import Optional
 
 from pandas.core.frame import DataFrame
 
-from repositories.ingestion import IngestionRepository
-from core.paths import city_pbf_path
+from infrastructure.repositories.ingestion import IngestionRepository
+from shared.paths import city_pbf_path
 
 
 REQUIRED_ROAD_TYPES = (

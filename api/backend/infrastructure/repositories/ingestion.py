@@ -6,8 +6,13 @@ from typing import Optional
 
 from sqlalchemy import text, update
 
-from database import engine, DATABASE_URL, CityAsync, SessionLocal
-from models import City, CityProperty
+from infrastructure.database import (
+    DATABASE_URL,
+    CityAsync,
+    SessionLocal,
+    engine,
+)
+from infrastructure.models import City, CityProperty
 
 
 logger = logging.getLogger(__name__)

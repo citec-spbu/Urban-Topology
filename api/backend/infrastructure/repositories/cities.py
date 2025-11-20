@@ -1,7 +1,13 @@
 from typing import Sequence, Optional
+
 from sqlalchemy import update
-from database import database, engine
-from database import CityAsync, CityPropertyAsync
+
+from infrastructure.database import (
+    CityAsync,
+    CityPropertyAsync,
+    database,
+    engine,
+)
 
 
 class CityRepository:

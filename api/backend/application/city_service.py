@@ -2,9 +2,9 @@
 
 from typing import List, Optional, Mapping, Any
 
-from models import City, CityProperty
-from repositories import CityRepository
-from schemas import CityBase, PropertyBase
+from domain.schemas import CityBase, PropertyBase
+from infrastructure.models import City, CityProperty
+from infrastructure.repositories.cities import CityRepository
 
 
 async def property_to_scheme(

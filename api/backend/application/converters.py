@@ -5,7 +5,7 @@ from typing import Iterable, List, Sequence, Optional
 
 import pandas as pd
 
-from schemas import GraphBase, PointBase
+from domain.schemas import GraphBase, PointBase
 
 
 def list_to_csv_str(data: Iterable[Sequence], columns: List[str]):

@@ -4,9 +4,9 @@ from typing import Optional
 
 from pandas.core.frame import DataFrame
 
-from ingestion_service import IngestionService, REQUIRED_ROAD_TYPES
-from models import City, CityProperty, Point
-from database import SessionLocal
+from application.ingestion.service import IngestionService, REQUIRED_ROAD_TYPES
+from infrastructure.models import City, CityProperty, Point
+from infrastructure.database import SessionLocal
 
 
 AUTH_FILE_PATH = "./data/db.properties"

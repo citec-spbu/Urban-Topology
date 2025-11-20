@@ -6,15 +6,16 @@ from typing import List
 
 import networkx as nx
 
-from repositories import CityRepository, GraphRepository
-from core.converters import (
+from application.converters import (
     point_obj_to_list,
     edge_obj_to_list,
     record_obj_to_wprop,
     record_obj_to_pprop,
 )
-from core.ingestion_utils import add_graph_to_db
-from core.paths import city_pbf_path
+from application.ingestion.utils import add_graph_to_db
+from infrastructure.repositories.cities import CityRepository
+from infrastructure.repositories.graph import GraphRepository
+from shared.paths import city_pbf_path
 
 
 logger = logging.getLogger(__name__)

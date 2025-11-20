@@ -27,8 +27,8 @@ services:
         source: logsvol
         target: /app/logs
       - type: bind
-        source: ./api/fastapi_service # delete in prod and add copy
-        target: /app/fastapi_service
+        source: ./api/backend # delete in prod and add copy
+        target: /app/backend
       - type: bind
         source: ./cities_pbf
         target: /cities_pbf

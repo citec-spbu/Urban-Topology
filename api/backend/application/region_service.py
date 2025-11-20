@@ -12,8 +12,8 @@ from shapely.geometry.multilinestring import MultiLineString
 from shapely.geometry.polygon import Polygon
 from shapely.ops import unary_union
 
-from schemas import RegionBase, RegionInfoBase
-from repositories import CityRepository
+from domain.schemas import RegionBase, RegionInfoBase
+from infrastructure.repositories.cities import CityRepository
 
 
 def to_list(polygon: LineString) -> List[List[float]]:

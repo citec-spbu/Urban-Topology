@@ -1,21 +1,20 @@
-"""Facade that gathers core services and re-exports them for the legacy API layer."""
-
-from database import SessionLocal
-from geopandas.geodataframe import GeoDataFrame
-from typing import List, TYPE_CHECKING
+"""Facade that gathers application services and re-exports them for the API layer."""
 
 import logging
+from typing import List, TYPE_CHECKING
 
-from core.converters import graph_to_scheme
-from core.city_service import get_city, get_cities
-from core.graph_service import graph_from_poly
-from core.region_service import (
+from geopandas.geodataframe import GeoDataFrame
+
+from application.converters import graph_to_scheme
+from application.city_service import get_city, get_cities
+from application.graph_service import graph_from_poly
+from application.region_service import (
     list_to_polygon,
     polygons_from_region,
     get_regions,
     get_regions_info,
 )
-from core.ingestion_utils import (
+from application.ingestion.utils import (
     AUTH_FILE_PATH,
     add_city_to_db,
     add_graph_to_db,
@@ -24,6 +23,7 @@ from core.ingestion_utils import (
     add_property_to_db,
     init_db,
 )
+from infrastructure.database import SessionLocal
 
 # Public API surface preserved for compatibility with the legacy imports
 __all__ = [

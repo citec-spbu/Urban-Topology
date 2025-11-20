@@ -23,6 +23,6 @@ RUN apt-get install -y gdal-bin libgdal-dev g++
 
 RUN pip install --upgrade pip && pip install -r /requirements.txt
 
-WORKDIR /app/fastapi_service/
+WORKDIR /app/backend/
 
 ENTRYPOINT [ "python", "main.py" ]

@@ -1,6 +1,8 @@
 from typing import Iterable, Sequence
+
 from sqlalchemy import text
-from database import database, engine
+
+from infrastructure.database import database, engine
 
 
 class GraphRepository:

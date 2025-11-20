@@ -1,7 +1,9 @@
+from datetime import datetime
+
 from sqlalchemy import Column, Integer, Boolean, DateTime, Float, BigInteger
 from sqlalchemy.dialects.mysql import VARCHAR
-from database import Base
-from datetime import datetime
+
+from infrastructure.database import Base
 
 
 class City(Base):
