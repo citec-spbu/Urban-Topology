@@ -60,8 +60,8 @@ export const TownPage = () => {
 
     return (
         <div
-            className={`overflow-hidden relative w-full bg-white h-[calc(100vh-64px)]${isLoading ? ' pointer-events-none cursor-not-allowed' : ''}`}>
-            <div className={`${isMapActive ? 'flex' : 'hidden'} h-[calc(100vh-64px)] w-full`}>
+            className={`overflow-hidden relative w-full bg-white h-[calc(100vh-48px)]${isLoading ? ' pointer-events-none cursor-not-allowed' : ''}`}>
+            <div className={`${isMapActive ? 'flex' : 'hidden'} h-[calc(100vh-48px)] w-full flex-1 min-w-0`}>
                 <a id="map-section"/>
                 {town && (
                     <MapComponent
@@ -73,7 +73,7 @@ export const TownPage = () => {
                 )}
             </div>
 
-            <div className={`${isRoadsActive ? 'flex' : 'hidden'} h-[calc(100vh-64px)] w-full`}>
+            <div className={`${isRoadsActive ? 'flex' : 'hidden'} h-[calc(100vh-48px)] w-full flex-1 min-w-0`}>
                 <a id="roads-section"/>
                 <RoadsComponent graphData={graphData} onDownload={handleDownload} isActive={isRoadsActive}/>
             </div>

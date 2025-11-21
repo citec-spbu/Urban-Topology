@@ -32,6 +32,18 @@ interface RoadsComponentProps {
 
 const getNodeLatLng = (node: Node): [number, number] => [node.lat, node.lon]
 
+const RemoveLeafletPrefix: React.FC = () => {
+    const map = useMap();
+
+    useEffect(() => {
+        if (map?.attributionControl) {
+            map.attributionControl.setPrefix('');
+        }
+    }, [map]);
+
+    return null;
+};
+
 const parseCSV = (csv?: string): Record<string, string>[] => {
     const trimmed = (csv || '').trim()
     if (!trimmed) return []
@@ -51,13 +63,13 @@ const parseCSV = (csv?: string): Record<string, string>[] => {
 
 const hasCsvGraphData = (
     data: GraphData | null,
-): data is GraphData & { edges_csv: string; points_csv: string } => {
+): data is GraphData & { edges_csv: string; points_csv: string; metrics_csv: string } => {
     return (
         !!data &&
-        typeof (data as any).edges_csv === 'string' &&
-        typeof (data as any).points_csv === 'string'
-    )
-}
+        typeof (data as Record<string, unknown>).edges_csv === 'string' &&
+        typeof (data as Record<string, unknown>).points_csv === 'string'
+    );
+};
 
 const toNumber = (value?: string): number | undefined => {
     if (value === undefined || value === null || value === '') return undefined
@@ -130,23 +142,23 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
     let edges: Edge[] = []
 
     if (hasCsvGraphData(graphData)) {
-        const metricRows = parseCSV((graphData as any).metrics_csv)
+        const metricRows = parseCSV(graphData.metrics_csv);
         const metricsById = metricRows.reduce<Record<string, Record<string, string>>>((acc, row) => {
-            const id = row.id?.trim()
-            if (id) acc[id] = row
-            return acc
-        }, {})
+            const id = row.id?.trim();
+            if (id) acc[id] = row;
+            return acc;
+        }, {});
 
-        const pointRows = parseCSV(graphData.points_csv)
+        const pointRows = parseCSV(graphData.points_csv);
         pointRows.forEach((row) => {
-            const id = row.id?.trim()
-            if (!id) return
+            const id = row.id?.trim();
+            if (!id) return;
 
-            const lat = toNumber(row.latitude || row.lat || row.latitude_value)
-            const lon = toNumber(row.longitude || row.long || row.longitude_value || row.longtitude)
-            if (lat === undefined || lon === undefined) return
+            const lat = toNumber(row.latitude || row.lat || row.latitude_value);
+            const lon = toNumber(row.longitude || row.long || row.longitude_value || row.longtitude);
+            if (lat === undefined || lon === undefined) return;
 
-            const metric = metricsById[id] ?? {}
+            const metric = metricsById[id] ?? {};
 
             nodes[id] = {
                 lat,
@@ -159,10 +171,10 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                 betweenness_value: metric.betweenness,
                 radius_value: metric.radius,
                 color_value: metric.color,
-            }
-        })
+            };
+        });
 
-        const edgeRows = parseCSV(graphData.edges_csv)
+        const edgeRows = parseCSV(graphData.edges_csv);
         edges = edgeRows
             .map((row) => ({
                 id: row.id,
@@ -171,7 +183,7 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                 to: row.target || row.to || row.id_dist || '',
                 name: row.name,
             }))
-            .filter((edge) => edge.from && edge.to)
+            .filter((edge) => edge.from && edge.to);
     } else if (graphData && typeof graphData === 'object') {
         nodes = graphData.nodes && typeof graphData.nodes === 'object' ? graphData.nodes as Record<string, Node> : {}
         const edgesObj = graphData.edges && typeof graphData.edges === 'object' ? graphData.edges : {}
@@ -187,11 +199,11 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
     const bounds = useMemo(() => computeBounds(safeNodes), [safeNodes])
 
     if (!safeNodes || Object.keys(safeNodes).length === 0 || !edges || edges.length === 0) {
-        return <div className="p-8 text-center text-gray-500">Нет данных для отображения графа.</div>
+        return <div className="p-8 text-center text-gray-500 w-full min-w-0">Нет данных для отображения графа.</div>
     }
 
     return (
-        <div className="relative h-full bg-white flex flex-col">
+        <div className="relative h-full w-full min-w-0 bg-white flex flex-col">
             <MapContainer
                 center={center}
                 zoom={12}
@@ -199,6 +211,7 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                 className="flex-1 min-h-[400px] rounded-lg shadow-lg"
                 style={{height: '100%', width: '100%'}}
             >
+                <RemoveLeafletPrefix />
                 <MapResizer active={isActive} bounds={bounds}/>
                 <TileLayer
                     attribution="&copy; OpenStreetMap contributors"
@@ -241,7 +254,7 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                     </CircleMarker>
                 ))}
             </MapContainer>
-            <div className="absolute bottom-5 right-5 z-50">
+            <div className="absolute bottom-5 right-5 z-[1200]">
                 <button
                     onClick={onDownload}
                     className="px-5 py-2 bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white rounded shadow transition font-medium"
