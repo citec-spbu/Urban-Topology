@@ -11,6 +11,8 @@ from application.converters import (
     edge_obj_to_list,
     record_obj_to_wprop,
     record_obj_to_pprop,
+    access_node_obj_to_list,
+    access_edge_obj_to_list,
 )
 from application.ingestion.utils import add_graph_to_db
 from infrastructure.repositories.cities import CityRepository
@@ -133,7 +135,24 @@ async def graph_from_poly(city_id, polygon):
     oneway_ids = await repo_graph.oneway_ids(city_id=city_id)
     metrics = await calc_metrics(points, edges, oneway_ids)
 
-    return points, edges, points_prop, ways_prop, metrics
+    access_nodes_raw = await repo_graph.access_nodes_in_polygon(
+        city_id=city_id, polygon_wkt=polygon_wkt
+    )
+    access_edges_raw = await repo_graph.access_edges_in_polygon(
+        city_id=city_id, polygon_wkt=polygon_wkt
+    )
+    access_nodes = list(map(access_node_obj_to_list, access_nodes_raw))
+    access_edges = list(map(access_edge_obj_to_list, access_edges_raw))
+
+    return (
+        points,
+        edges,
+        points_prop,
+        ways_prop,
+        metrics,
+        access_nodes,
+        access_edges,
+    )
 
 
 async def calc_metrics(points, edges, oneway_ids):

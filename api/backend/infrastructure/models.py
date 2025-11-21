@@ -35,3 +35,31 @@ class Point(Base):
     id = Column(type_=BigInteger, primary_key=True, autoincrement=True, nullable=True)
     longitude = Column(type_=Float)
     latitude = Column(type_=Float)
+
+
+class AccessNode(Base):
+    __tablename__ = "AccessNodes"
+
+    id = Column(type_=BigInteger, primary_key=True, autoincrement=True, nullable=False)
+    id_city = Column(type_=BigInteger)
+    source_type = Column(type_=VARCHAR(16))
+    source_id = Column(type_=BigInteger)
+    node_type = Column(type_=VARCHAR(16))
+    longitude = Column(type_=Float)
+    latitude = Column(type_=Float)
+    name = Column(type_=VARCHAR(128))
+    tags = Column(type_=VARCHAR(1024))
+
+
+class AccessEdge(Base):
+    __tablename__ = "AccessEdges"
+
+    id = Column(type_=BigInteger, primary_key=True, autoincrement=True, nullable=False)
+    id_city = Column(type_=BigInteger)
+    id_src = Column(type_=BigInteger)
+    id_dst = Column(type_=BigInteger)
+    source_way_id = Column(type_=BigInteger)
+    road_type = Column(type_=VARCHAR(32))
+    length_m = Column(type_=Float)
+    is_building_link = Column(type_=Boolean, default=False)
+    name = Column(type_=VARCHAR(128))

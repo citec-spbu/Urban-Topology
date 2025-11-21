@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     BigInteger,
     BIGINT,
+    Text,
 )
 from sqlalchemy import create_engine
 from sqlalchemy import MetaData
@@ -123,6 +124,64 @@ PointPropertyAsync = Table(
     ),
     Column("id_property", Integer, ForeignKey("Properties.id"), nullable=False),
     Column("value", String, nullable=False),
+)
+
+
+AccessNodeAsync = Table(
+    "AccessNodes",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True, nullable=False),
+    Column(
+        "id_city",
+        BigInteger,
+        ForeignKey("Cities.id", onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("source_type", VARCHAR(16), nullable=False),
+    Column("source_id", BigInteger, nullable=True),
+    Column("node_type", VARCHAR(16), nullable=False),
+    Column("longitude", Float, nullable=False),
+    Column("latitude", Float, nullable=False),
+    Column("name", VARCHAR(128), nullable=True),
+    Column("tags", Text, nullable=True),
+)
+
+
+AccessEdgeAsync = Table(
+    "AccessEdges",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True, nullable=False),
+    Column(
+        "id_city",
+        BigInteger,
+        ForeignKey("Cities.id", onupdate="CASCADE", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column(
+        "id_src",
+        BigInteger,
+        ForeignKey(
+            "AccessNodes.id",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        nullable=False,
+    ),
+    Column(
+        "id_dst",
+        BigInteger,
+        ForeignKey(
+            "AccessNodes.id",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        nullable=False,
+    ),
+    Column("source_way_id", BigInteger, nullable=True),
+    Column("road_type", VARCHAR(32), nullable=False),
+    Column("length_m", Float, nullable=True),
+    Column("is_building_link", Boolean, nullable=False, default=False),
+    Column("name", VARCHAR(128), nullable=True),
 )
 
 

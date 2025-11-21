@@ -11,3 +11,4 @@ dadata
 osmium
 haversine
 networkx==3.0
+scipy

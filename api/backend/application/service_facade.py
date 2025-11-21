@@ -5,7 +5,7 @@ from typing import List, TYPE_CHECKING
 
 from geopandas.geodataframe import GeoDataFrame
 
-from application.converters import graph_to_scheme
+from application.converters import graph_to_scheme, graph_to_zip_archive
 from application.city_service import get_city, get_cities
 from application.graph_service import graph_from_poly
 from application.region_service import (
@@ -23,6 +23,7 @@ from application.ingestion.utils import (
     add_property_to_db,
     init_db,
 )
+from domain.schemas import GraphBase
 from infrastructure.database import SessionLocal
 
 # Public API surface preserved for compatibility with the legacy imports
@@ -40,6 +41,7 @@ __all__ = [
     "get_regions_info",
     "graph_from_ids",
     "graph_to_scheme",
+    "graph_to_zip",
     "init_db",
     "list_to_polygon",
     "polygons_from_region",
@@ -78,3 +80,8 @@ async def graph_from_ids(city_id: int, regions_ids: List[int], regions: GeoDataF
 
     gfp = await graph_from_poly(city_id=city_id, polygon=polygon)
     return gfp
+
+
+def graph_to_zip(graph_base: GraphBase):
+    """Wrap the graph CSV payloads into a downloadable ZIP archive."""
+    return graph_to_zip_archive(graph_base)

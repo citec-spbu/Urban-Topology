@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import subprocess
@@ -7,12 +8,16 @@ from typing import Optional
 from sqlalchemy import text, update
 
 from infrastructure.database import (
+    AccessEdgeAsync,
+    AccessNodeAsync,
     DATABASE_URL,
     CityAsync,
     SessionLocal,
     engine,
+    metadata,
 )
 from infrastructure.models import City, CityProperty
+from infrastructure.osm.osm_handler import build_access_graph
 
 
 logger = logging.getLogger(__name__)
@@ -171,6 +176,84 @@ class IngestionRepository:
                 )
             )
 
+    def populate_access_graph(self, *, city_id: int, file_path: str) -> None:
+        """Build driveway/intersection graph directly from the PBF and store it."""
+        metadata.create_all(engine, tables=[AccessNodeAsync, AccessEdgeAsync])
+
+        nodes_payload, edges_payload = build_access_graph(osm_file_path=file_path)
+
+        def _trim(name: Optional[str]) -> Optional[str]:
+            if not name:
+                return None
+            return name[:128]
+
+        with engine.begin() as conn:
+            conn.execute(
+                text('DELETE FROM "AccessEdges" WHERE id_city = :city_id'),
+                {"city_id": city_id},
+            )
+            conn.execute(
+                text('DELETE FROM "AccessNodes" WHERE id_city = :city_id'),
+                {"city_id": city_id},
+            )
+
+            if not nodes_payload:
+                return
+
+            node_rows = []
+            for node in nodes_payload:
+                tags = node.get("tags") or None
+                node_rows.append(
+                    {
+                        "id_city": city_id,
+                        "source_type": node.get("source_type") or "node",
+                        "source_id": node.get("source_id"),
+                        "node_type": node.get("node_type"),
+                        "longitude": node.get("longitude"),
+                        "latitude": node.get("latitude"),
+                        "name": _trim(node.get("name")),
+                        "tags": json.dumps(tags, ensure_ascii=True) if tags else None,
+                    }
+                )
+
+            result = conn.execute(
+                AccessNodeAsync.insert().returning(
+                    AccessNodeAsync.c.id,
+                    AccessNodeAsync.c.source_type,
+                    AccessNodeAsync.c.source_id,
+                ),
+                node_rows,
+            )
+
+            key_to_db_id = {
+                f"{row.source_type}:{row.source_id}": row.id for row in result
+            }
+
+            if not edges_payload:
+                return
+
+            edge_rows = []
+            for edge in edges_payload:
+                src_id = key_to_db_id.get(edge.get("source_key"))
+                dst_id = key_to_db_id.get(edge.get("target_key"))
+                if src_id is None or dst_id is None:
+                    continue
+                edge_rows.append(
+                    {
+                        "id_city": city_id,
+                        "id_src": src_id,
+                        "id_dst": dst_id,
+                        "source_way_id": edge.get("source_way_id"),
+                        "road_type": edge.get("road_type", "service"),
+                        "length_m": edge.get("length_m"),
+                        "is_building_link": bool(edge.get("is_building_link", False)),
+                        "name": _trim(edge.get("name")),
+                    }
+                )
+
+            if edge_rows:
+                conn.execute(AccessEdgeAsync.insert(), edge_rows)
+
             # Insert unique property keys collected from nodes and ways
             conn.execute(
                 text(
@@ -287,4 +370,5 @@ class IngestionRepository:
             city_name=city_name,
         )
         self.fill_city_graph_from_osm_tables(city_id=city_id)
+        self.populate_access_graph(city_id=city_id, file_path=file_path)
         self.mark_downloaded(city_id)

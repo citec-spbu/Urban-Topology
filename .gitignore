@@ -1,6 +1,6 @@
 *.pyc
 node_modules
-cache
+caches
 __pycache__
 *.pbf
 venv/

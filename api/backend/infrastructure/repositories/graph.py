@@ -267,3 +267,61 @@ class GraphRepository:
                 "types": list(highway_types),
             },
         )
+
+    async def access_nodes_in_polygon(
+        self, city_id: int, polygon_wkt: str
+    ) -> Sequence[tuple]:
+        q = """
+            WITH poly AS (
+                SELECT ST_GeomFromText(:wkt, 4326) AS g
+            )
+            SELECT an.id,
+                   an.node_type,
+                   an.longitude,
+                   an.latitude,
+                   an.source_type,
+                   an.source_id,
+                   an.name
+            FROM "AccessNodes" an
+            CROSS JOIN poly
+            WHERE an.id_city = :city_id
+              AND ST_Within(ST_SetSRID(ST_MakePoint(an.longitude, an.latitude), 4326), poly.g)
+        """
+        return await database.fetch_all(
+            q,
+            values={
+                "wkt": polygon_wkt,
+                "city_id": city_id,
+            },
+        )
+
+    async def access_edges_in_polygon(
+        self, city_id: int, polygon_wkt: str
+    ) -> Sequence[tuple]:
+        q = """
+            WITH poly AS (
+                SELECT ST_GeomFromText(:wkt, 4326) AS g
+            )
+            SELECT ae.id,
+                   ae.id_src,
+                   ae.id_dst,
+                   ae.source_way_id,
+                   ae.road_type,
+                   ae.length_m,
+                   ae.is_building_link,
+                   ae.name
+            FROM "AccessEdges" ae
+            JOIN "AccessNodes" ns ON ns.id = ae.id_src
+            JOIN "AccessNodes" nd ON nd.id = ae.id_dst
+            CROSS JOIN poly
+            WHERE ae.id_city = :city_id
+              AND ST_Within(ST_SetSRID(ST_MakePoint(ns.longitude, ns.latitude), 4326), poly.g)
+              AND ST_Within(ST_SetSRID(ST_MakePoint(nd.longitude, nd.latitude), 4326), poly.g)
+        """
+        return await database.fetch_all(
+            q,
+            values={
+                "wkt": polygon_wkt,
+                "city_id": city_id,
+            },
+        )
