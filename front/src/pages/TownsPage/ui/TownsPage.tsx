@@ -92,8 +92,8 @@ export const TownsPage = () => {
                                 className="relative block flex-[0_1_320px] min-w-[280px] no-underline text-inherit rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.08)] bg-white transition-transform transition-shadow duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-105 hover:shadow-[0_8px_32px_rgba(34,60,80,0.18)] focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2"
                             >
                                 <div className="h-[220px] bg-[#eee]" aria-hidden="true">
-                                    <img src={buildPreviewUrl(city)} alt="" loading="lazy"
-                                         className="w-full h-full object-cover block"/>
+                                    <img src={buildPreviewUrl(city)} alt="cityPreview" loading="lazy"
+                                         className="w-full h-full object-cover select-none"/>
                                 </div>
                                 <div className="p-3 pt-3 text-center border-t border-[#ccc]">
                                     <h2 className="m-0 text-[1.25rem] font-semibold">{city.city_name}</h2>
