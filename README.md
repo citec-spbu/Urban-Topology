@@ -25,6 +25,20 @@
 
      docker compose down
 
+## Тесты
+
+Все тесты находятся в каталоге `api/backend/tests`. Перед запуском перейдите в папку `api` и активируйте виртуальное окружение (`source venv/bin/activate`), если оно ещё не активно.
+
+- Прогнать унифицированный набор тестов с отображением покрытия в терминале:
+
+  venv/bin/python -m pytest --cov=backend --cov-report=term-missing
+
+- Сгенерировать HTML-отчёт о тестах и покрытии:
+
+  venv/bin/python -m pytest backend/tests --cov=backend --cov-report=html --html=report.html --self-contained-html
+
+  После выполнения появятся файлы `report.html` (результаты тестов) и каталог `htmlcov/index.html` (детальное покрытие). Их можно открыть в браузере для наглядного просмотра.
+
 # Анализ графов
 
 В каталоге `/analytics` лежат ноутбуки, которые используются для поиска степнного закона (degrees.ipynb), для вычисления мер центральности (centrality.ipynb) и betweenness'а.

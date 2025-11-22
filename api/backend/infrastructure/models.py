@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Column, Integer, Boolean, DateTime, Float, BigInteger
 from sqlalchemy.dialects.mysql import VARCHAR
 
 from infrastructure.database import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class City(Base):
@@ -26,7 +30,7 @@ class CityProperty(Base):
     population = Column(type_=Integer)
     population_density = Column(type_=Float, default=0, index=True)
     time_zone = Column(type_=VARCHAR(6))
-    time_created = Column(type_=DateTime, index=True, default=datetime.utcnow)
+    time_created = Column(type_=DateTime(timezone=True), index=True, default=utcnow)
 
 
 class Point(Base):

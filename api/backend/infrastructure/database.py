@@ -1,25 +1,26 @@
-from sqlalchemy import (
-    Column,
-    Integer,
-    VARCHAR,
-    Boolean,
-    Float,
-    DateTime,
-    ForeignKey,
-    String,
-    BigInteger,
-    BIGINT,
-    Text,
-)
-from sqlalchemy import create_engine
-from sqlalchemy import MetaData
-from sqlalchemy import Table
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime
-from databases import Database
+import os
+from datetime import datetime, timezone
+from typing import Optional
 
-DATABASE_URL = "postgresql://user:password@postgres:5432/fastapi_database"
+from databases import Database
+from sqlalchemy import (
+    BIGINT,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    VARCHAR,
+)
+from sqlalchemy import MetaData, Table, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+DEFAULT_DATABASE_URL = "postgresql://user:password@postgres:5432/fastapi_database"
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 
 metadata = MetaData()
 
@@ -40,6 +41,12 @@ PropertyAsync = Table(
 )
 
 
+def utcnow() -> datetime:
+    """Return timezone-aware UTC timestamps for database defaults."""
+
+    return datetime.now(timezone.utc)
+
+
 CityPropertyAsync = Table(
     "CityProperties",
     metadata,
@@ -51,7 +58,12 @@ CityPropertyAsync = Table(
     Column("population", Integer),
     Column("population_density", Float, default=0, index=True),
     Column("time_zone", VARCHAR(6)),
-    Column("time_created", DateTime, index=True, default=datetime.utcnow),
+    Column(
+        "time_created",
+        DateTime(timezone=True),
+        index=True,
+        default=utcnow,
+    ),
 )
 
 
@@ -185,10 +197,28 @@ AccessEdgeAsync = Table(
 )
 
 
-engine = create_engine(DATABASE_URL, echo=True)
+engine = None
 
-database = Database(DATABASE_URL)
+database = None
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False)
+
+
+def configure_database(url: Optional[str] = None, *, echo: bool = True) -> str:
+    """Configure SQLAlchemy engine/session/database with a new URL."""
+
+    global DATABASE_URL, engine, database
+
+    resolved_url = url or os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
+    DATABASE_URL = resolved_url
+    engine = create_engine(resolved_url, echo=echo)
+    SessionLocal.configure(bind=engine)
+    database = Database(resolved_url)
+    return resolved_url
+
 
 Base = declarative_base()
+
+
+# Initialize globals using the resolved DATABASE_URL at import time
+configure_database(DATABASE_URL)

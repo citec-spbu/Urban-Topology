@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import text, update
+from sqlalchemy.exc import CompileError, IntegrityError
 
 from infrastructure.database import (
     AccessEdgeAsync,
@@ -216,18 +217,32 @@ class IngestionRepository:
                     }
                 )
 
-            result = conn.execute(
-                AccessNodeAsync.insert().returning(
-                    AccessNodeAsync.c.id,
-                    AccessNodeAsync.c.source_type,
-                    AccessNodeAsync.c.source_id,
-                ),
-                node_rows,
-            )
+            key_to_db_id = {}
+            try:
+                result = conn.execute(
+                    AccessNodeAsync.insert().returning(
+                        AccessNodeAsync.c.id,
+                        AccessNodeAsync.c.source_type,
+                        AccessNodeAsync.c.source_id,
+                    ),
+                    node_rows,
+                )
 
-            key_to_db_id = {
-                f"{row.source_type}:{row.source_id}": row.id for row in result
-            }
+                key_to_db_id = {
+                    f"{row.source_type}:{row.source_id}": row.id for row in result
+                }
+            except (CompileError, IntegrityError):
+                max_id = conn.execute(
+                    text('SELECT COALESCE(MAX(id), 0) FROM "AccessNodes"')
+                ).scalar_one()
+                next_id = int(max_id or 0)
+                for payload in node_rows:
+                    next_id += 1
+                    payload_with_id = dict(payload)
+                    payload_with_id["id"] = next_id
+                    conn.execute(AccessNodeAsync.insert(), payload_with_id)
+                    key = f"{payload_with_id['source_type']}:{payload_with_id['source_id']}"
+                    key_to_db_id[key] = next_id
 
             if not edges_payload:
                 return
@@ -252,7 +267,20 @@ class IngestionRepository:
                 )
 
             if edge_rows:
-                conn.execute(AccessEdgeAsync.insert(), edge_rows)
+                try:
+                    conn.execute(AccessEdgeAsync.insert(), edge_rows)
+                except IntegrityError:
+                    max_edge_id = conn.execute(
+                        text('SELECT COALESCE(MAX(id), 0) FROM "AccessEdges"')
+                    ).scalar_one()
+                    next_edge_id = int(max_edge_id or 0)
+                    rows_with_ids = []
+                    for payload in edge_rows:
+                        next_edge_id += 1
+                        row = dict(payload)
+                        row["id"] = next_edge_id
+                        rows_with_ids.append(row)
+                    conn.execute(AccessEdgeAsync.insert(), rows_with_ids)
 
             # Insert unique property keys collected from nodes and ways
             conn.execute(

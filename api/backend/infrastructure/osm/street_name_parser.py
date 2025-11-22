@@ -1,6 +1,10 @@
 from re import search
 from dadata import Dadata
-from osmium.osm._osm import WayNodeList
+
+try:  # graceful fallback for environments without osmium binary wheels
+    from osmium.osm._osm import WayNodeList
+except ImportError:  # pragma: no cover
+    WayNodeList = list  # type: ignore
 
 token = "c9bd181f9fd147bbb8259a3765caa38b5b61f942"
 regex = r",( (ул|пр) ([\w\s-]+))|( ([\w\s-]+) (пр-д|пл)),"

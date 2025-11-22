@@ -12,3 +12,7 @@ osmium
 haversine
 networkx==3.0
 scipy
+pytest
+pytest-cov
+pytest-html
+aiosqlite
