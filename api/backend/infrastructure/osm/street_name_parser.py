@@ -1,4 +1,6 @@
+import os
 from re import search
+
 from dadata import Dadata
 
 try:  # graceful fallback for environments without osmium binary wheels
@@ -6,13 +8,21 @@ try:  # graceful fallback for environments without osmium binary wheels
 except ImportError:  # pragma: no cover
     WayNodeList = list  # type: ignore
 
-token = "c9bd181f9fd147bbb8259a3765caa38b5b61f942"
 regex = r",( (ул|пр) ([\w\s-]+))|( ([\w\s-]+) (пр-д|пл)),"
 
 
-def parse_name(nodes_list: WayNodeList):
+def _get_dadata_token() -> str:
+    token = os.getenv("DADATA_TOKEN")
+    if not token:
+        raise RuntimeError(
+            "DADATA_TOKEN environment variable is required for DaData street name parsing."
+        )
+    return token
+
+
+def parse_name(nodes_list):
     """Infer a street name for the provided OSM way nodes using DaData geolocation."""
-    dadata = Dadata(token)
+    dadata = Dadata(_get_dadata_token())
 
     length = len(nodes_list)
     for i in range(0, length - 1):

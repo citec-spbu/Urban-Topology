@@ -1,5 +1,4 @@
 import os
-from datetime import datetime, timezone
 from typing import Optional
 
 from databases import Database
@@ -19,6 +18,8 @@ from sqlalchemy import (
 from sqlalchemy import MetaData, Table, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+from shared.datetime_utils import utcnow
+
 DEFAULT_DATABASE_URL = "postgresql://user:password@postgres:5432/fastapi_database"
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
 
@@ -27,7 +28,7 @@ metadata = MetaData()
 CityAsync = Table(
     "Cities",
     metadata,
-    Column("id", BigInteger, primary_key=True, autoincrement=True, nullable=True),
+    Column("id", BigInteger, primary_key=True, autoincrement=True, nullable=False),
     Column("id_property", Integer),
     Column("city_name", VARCHAR(30), unique=True),
     Column("downloaded", Boolean, index=True, default=False),
@@ -41,18 +42,12 @@ PropertyAsync = Table(
 )
 
 
-def utcnow() -> datetime:
-    """Return timezone-aware UTC timestamps for database defaults."""
-
-    return datetime.now(timezone.utc)
-
-
 CityPropertyAsync = Table(
     "CityProperties",
     metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True, nullable=True),
-    Column("c_latitude", Float, nullable=True),
-    Column("c_longitude", Float),
+    Column("id", Integer, primary_key=True, autoincrement=True, nullable=False),
+    Column("c_latitude", Float, nullable=False),
+    Column("c_longitude", Float, nullable=False),
     Column("id_district", Integer),
     Column("id_start_polygon", BigInteger),
     Column("population", Integer),
@@ -71,8 +66,8 @@ PointAsync = Table(
     "Points",
     metadata,
     Column("id", BIGINT, primary_key=True, nullable=False),
-    Column("longitude", Float),
-    Column("latitude", Float),
+    Column("longitude", Float, nullable=False),
+    Column("latitude", Float, nullable=False),
 )
 
 WayAsync = Table(
@@ -203,18 +198,52 @@ database = None
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False)
 
+_DB_INITIALIZED = False
+
 
 def configure_database(url: Optional[str] = None, *, echo: bool = True) -> str:
-    """Configure SQLAlchemy engine/session/database with a new URL."""
+    """Initialize global database connection objects.
 
-    global DATABASE_URL, engine, database
+    This function is intended to run exactly once at process startup. Re-running it
+    after the initial configuration is unsafe in a concurrent environment because
+    existing sessions, connections and in-flight transactions may still reference
+    the previous engine. For tests, prefer creating isolated engines with
+    ``create_test_database`` instead of reconfiguring globals.
+
+    Raises:
+        RuntimeError: If called after the database has already been initialized.
+    """
+
+    global DATABASE_URL, engine, database, _DB_INITIALIZED
+
+    if _DB_INITIALIZED:
+        raise RuntimeError(
+            "configure_database() has already been called; runtime reconfiguration is unsafe. "
+            "Use create_test_database(url) for isolated test engines instead."
+        )
 
     resolved_url = url or os.getenv("DATABASE_URL", DEFAULT_DATABASE_URL)
     DATABASE_URL = resolved_url
     engine = create_engine(resolved_url, echo=echo)
     SessionLocal.configure(bind=engine)
     database = Database(resolved_url)
+    _DB_INITIALIZED = True
     return resolved_url
+
+
+def create_test_database(url: str, *, echo: bool = False):
+    """Return isolated (engine, session_factory, database) triple for tests.
+
+    Does NOT mutate global engine / session / database, so parallel tests or
+    repeated invocations remain safe. The caller is responsible for invoking
+    ``metadata.create_all(test_engine)`` and disposing the engine after use.
+    """
+    test_engine = create_engine(url, echo=echo)
+    test_session_factory = sessionmaker(
+        autocommit=False, autoflush=False, bind=test_engine
+    )
+    test_database = Database(url)
+    return test_engine, test_session_factory, test_database
 
 
 Base = declarative_base()

@@ -22,6 +22,8 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=fastapi_database
+      - DATABASE_URL=postgresql://user:password@postgres:5432/fastapi_database
+      - DADATA_TOKEN=${DADATA_TOKEN?DADATA_TOKEN environment variable must be set}
     volumes:
       - type: volume
         source: logsvol

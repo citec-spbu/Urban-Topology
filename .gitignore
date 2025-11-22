@@ -4,3 +4,5 @@ caches
 __pycache__
 *.pbf
 venv/
+secrets/
+.env

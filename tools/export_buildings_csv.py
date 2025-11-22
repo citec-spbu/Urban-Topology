@@ -12,7 +12,7 @@ BACKEND_PATH = ROOT / "api" / "backend"
 if str(BACKEND_PATH) not in sys.path:
     sys.path.append(str(BACKEND_PATH))
 
-from osm_handler import build_access_graph  # noqa: E402
+from infrastructure.osm.osm_handler import build_access_graph
 
 
 def parse_args() -> argparse.Namespace:

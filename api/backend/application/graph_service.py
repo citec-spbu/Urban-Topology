@@ -27,7 +27,7 @@ async def graph_from_poly(city_id, polygon):
     repo_city = CityRepository()
     city = await repo_city.by_id(city_id)
     if city is None:
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None
 
     if not city.downloaded:
         city_name = city["city_name"]
@@ -39,7 +39,7 @@ async def graph_from_poly(city_id, polygon):
                 city_id,
                 pbf_path,
             )
-            return None, None, None, None, None
+            return None, None, None, None, None, None, None
 
         logger.info(
             "City %s graph not in DB; attempting on-demand import from %s",
@@ -62,7 +62,7 @@ async def graph_from_poly(city_id, polygon):
                 city_id,
                 pbf_path,
             )
-            return None, None, None, None, None
+            return None, None, None, None, None, None, None
 
         city = await repo_city.by_id(city_id)
         if city is None or not city.downloaded:
@@ -70,7 +70,7 @@ async def graph_from_poly(city_id, polygon):
                 "Graph import for city %s completed but city still not marked as downloaded",
                 city_id,
             )
-            return None, None, None, None, None
+            return None, None, None, None, None, None, None
 
     polygon_wkt = polygon.wkt
 
@@ -85,14 +85,14 @@ async def graph_from_poly(city_id, polygon):
             "Missing property id for 'name' (city_id=%s); graph build aborted",
             city_id,
         )
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None
 
     if prop_id_highway is None:
         logger.error(
             "Missing property id for 'highway' (city_id=%s); graph build aborted",
             city_id,
         )
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None
 
     # Retrieve points inside the polygon (PostGIS)
     res_points = await repo_graph.points_in_polygon(city_id, polygon_wkt)

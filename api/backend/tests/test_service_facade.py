@@ -43,7 +43,7 @@ async def test_graph_from_ids_returns_none_when_no_polygon(monkeypatch):
 
     result = await service_facade.graph_from_ids(1, [2], "regions")
 
-    assert result == (None, None, None, None, None)
+    assert result == (None, None, None, None, None, None, None)
 
 
 async def test_graph_from_ids_invokes_graph_service(monkeypatch):

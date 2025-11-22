@@ -8,6 +8,10 @@ from typing import Sequence
 import osmnx as ox
 import requests
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 USER_AGENT = "Urban-Topology-Analysis-Service/api"
 DEFAULT_HEADERS = {
     "Connection": "keep-alive",
@@ -38,13 +42,17 @@ def osmfetch(
         raise ValueError(
             "bbox must contain exactly 4 coordinates: south, west, north, east"
         )
+    if expansion < 0:
+        raise ValueError("expansion must be non-negative")
 
-    width = bbox_list[2] - bbox_list[0]
-    height = bbox_list[3] - bbox_list[1]
-    bbox_list[0] -= round(expansion / 200 * width, 8)
-    bbox_list[1] -= round(expansion / 200 * height, 8)
-    bbox_list[2] += round(expansion / 200 * width, 8)
-    bbox_list[3] += round(expansion / 200 * height, 8)
+    height = bbox_list[2] - bbox_list[0]
+    width = bbox_list[3] - bbox_list[1]
+    lat_delta = round(expansion / 200 * height, 8)
+    lon_delta = round(expansion / 200 * width, 8)
+    bbox_list[0] -= lat_delta
+    bbox_list[1] -= lon_delta
+    bbox_list[2] += lat_delta
+    bbox_list[3] += lon_delta
 
     query = f"nwr ({bbox_list[0]}, {bbox_list[1]}, {bbox_list[2]}, {bbox_list[3]});out geom;"
     body = {"data": query}
@@ -73,7 +81,7 @@ def download_city(
     try:
         city_info = ox.geocode_to_gdf(query)
     except ValueError:
-        print("Invalid city name")
+        logger.error(f"Invalid city name: {city_name}")
         return None
 
     north = city_info.iloc[0]["bbox_north"]

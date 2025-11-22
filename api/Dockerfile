@@ -19,7 +19,7 @@ RUN wget https://github.com/openstreetmap/osmosis/releases/download/0.48.3/osmos
 	&& rm osmosis-0.48.3.tgz && chmod a+x bin/osmosis
 
 # эта строчка нужня для сборки на маке под m1
-RUN apt-get install -y gdal-bin libgdal-dev g++ 
+# RUN apt-get install -y gdal-bin libgdal-dev g++
 
 RUN pip install --upgrade pip && pip install -r /requirements.txt
 

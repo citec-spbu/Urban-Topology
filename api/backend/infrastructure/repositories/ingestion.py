@@ -99,7 +99,46 @@ class IngestionRepository:
         city_name: str,
     ) -> None:
         """Filter the original PBF and load the result into PostgreSQL tables."""
-        base = Path(file_path)
+        # Sanitize city_name to prevent path traversal
+        import re
+
+        sanitized_name = re.sub(r"[^\w\-]", "_", city_name)
+        if sanitized_name != city_name:
+            raise ValueError("Invalid city_name: contains unsafe characters")
+
+        base = Path(file_path).resolve()
+        auth_path = Path(auth_file_path).resolve()
+
+        # Verify paths are within expected directory
+        from shared.paths import cities_pbf_dir, auth_dir
+
+        expected_pbf_root = cities_pbf_dir().resolve()
+        expected_auth_root = auth_dir().resolve()
+
+        # Robust directory membership check using pathlib
+        def _is_within_directory(path: Path, allowed_root: Path) -> bool:
+            """Check if resolved path is contained within allowed_root directory."""
+            try:
+                # Python 3.9+ has is_relative_to; fallback to parents check for older versions
+                if hasattr(path, "is_relative_to"):
+                    return path.is_relative_to(allowed_root)
+                else:
+                    return allowed_root in path.parents or path == allowed_root
+            except (ValueError, OSError):
+                return False
+
+        if not _is_within_directory(base, expected_pbf_root):
+            raise ValueError(f"PBF file path outside expected directory: {base}")
+
+        if not base.is_file():
+            raise FileNotFoundError(f"PBF file does not exist: {base}")
+
+        if not _is_within_directory(auth_path, expected_auth_root):
+            raise ValueError(f"Auth file path outside expected directory: {auth_path}")
+
+        if not auth_path.is_file():
+            raise FileNotFoundError(f"Auth file does not exist: {auth_path}")
+
         stem = base.name
         for suf in (".osm.pbf", ".pbf"):
             if stem.endswith(suf):
@@ -111,13 +150,13 @@ class IngestionRepository:
             logger.info(
                 "Starting osmosis for city '%s' (file: %s)",
                 city_name,
-                file_path,
+                str(base),
             )
             subprocess.run(
                 [
                     "/osmosis/bin/osmosis",
                     "--read-pbf-fast",
-                    f"file={file_path}",
+                    f"file={str(base)}",
                     "--tf",
                     "accept-ways",
                     f"highway={types}",
@@ -137,7 +176,7 @@ class IngestionRepository:
                     "--read-pbf-fast",
                     f"file={road_file_path}",
                     "--write-pgsimp",
-                    f"authFile={auth_file_path}",
+                    f"authFile={auth_path!s}",
                 ],
                 check=True,
             )
@@ -198,73 +237,73 @@ class IngestionRepository:
                 {"city_id": city_id},
             )
 
-            if not nodes_payload:
-                return
-
-            node_rows = []
-            for node in nodes_payload:
-                tags = node.get("tags") or None
-                node_rows.append(
-                    {
-                        "id_city": city_id,
-                        "source_type": node.get("source_type") or "node",
-                        "source_id": node.get("source_id"),
-                        "node_type": node.get("node_type"),
-                        "longitude": node.get("longitude"),
-                        "latitude": node.get("latitude"),
-                        "name": _trim(node.get("name")),
-                        "tags": json.dumps(tags, ensure_ascii=True) if tags else None,
-                    }
-                )
-
             key_to_db_id = {}
-            try:
-                result = conn.execute(
-                    AccessNodeAsync.insert().returning(
-                        AccessNodeAsync.c.id,
-                        AccessNodeAsync.c.source_type,
-                        AccessNodeAsync.c.source_id,
-                    ),
-                    node_rows,
-                )
+            if nodes_payload:
+                node_rows = []
+                for node in nodes_payload:
+                    tags = node.get("tags") or None
+                    node_rows.append(
+                        {
+                            "id_city": city_id,
+                            "source_type": node.get("source_type") or "node",
+                            "source_id": node.get("source_id"),
+                            "node_type": node.get("node_type"),
+                            "longitude": node.get("longitude"),
+                            "latitude": node.get("latitude"),
+                            "name": _trim(node.get("name")),
+                            "tags": (
+                                json.dumps(tags, ensure_ascii=True) if tags else None
+                            ),
+                        }
+                    )
 
-                key_to_db_id = {
-                    f"{row.source_type}:{row.source_id}": row.id for row in result
-                }
-            except (CompileError, IntegrityError):
-                max_id = conn.execute(
-                    text('SELECT COALESCE(MAX(id), 0) FROM "AccessNodes"')
-                ).scalar_one()
-                next_id = int(max_id or 0)
-                for payload in node_rows:
-                    next_id += 1
-                    payload_with_id = dict(payload)
-                    payload_with_id["id"] = next_id
-                    conn.execute(AccessNodeAsync.insert(), payload_with_id)
-                    key = f"{payload_with_id['source_type']}:{payload_with_id['source_id']}"
-                    key_to_db_id[key] = next_id
+                try:
+                    result = conn.execute(
+                        AccessNodeAsync.insert().returning(
+                            AccessNodeAsync.c.id,
+                            AccessNodeAsync.c.source_type,
+                            AccessNodeAsync.c.source_id,
+                        ),
+                        node_rows,
+                    )
 
-            if not edges_payload:
-                return
+                    key_to_db_id = {
+                        f"{row.source_type}:{row.source_id}": row.id for row in result
+                    }
+                except (CompileError, IntegrityError):
+                    max_id = conn.execute(
+                        text('SELECT COALESCE(MAX(id), 0) FROM "AccessNodes"')
+                    ).scalar_one()
+                    next_id = int(max_id or 0)
+                    for payload in node_rows:
+                        next_id += 1
+                        payload_with_id = dict(payload)
+                        payload_with_id["id"] = next_id
+                        conn.execute(AccessNodeAsync.insert(), payload_with_id)
+                        key = f"{payload_with_id['source_type']}:{payload_with_id['source_id']}"
+                        key_to_db_id[key] = next_id
 
             edge_rows = []
-            for edge in edges_payload:
-                src_id = key_to_db_id.get(edge.get("source_key"))
-                dst_id = key_to_db_id.get(edge.get("target_key"))
-                if src_id is None or dst_id is None:
-                    continue
-                edge_rows.append(
-                    {
-                        "id_city": city_id,
-                        "id_src": src_id,
-                        "id_dst": dst_id,
-                        "source_way_id": edge.get("source_way_id"),
-                        "road_type": edge.get("road_type", "service"),
-                        "length_m": edge.get("length_m"),
-                        "is_building_link": bool(edge.get("is_building_link", False)),
-                        "name": _trim(edge.get("name")),
-                    }
-                )
+            if nodes_payload and edges_payload:
+                for edge in edges_payload:
+                    src_id = key_to_db_id.get(edge.get("source_key"))
+                    dst_id = key_to_db_id.get(edge.get("target_key"))
+                    if src_id is None or dst_id is None:
+                        continue
+                    edge_rows.append(
+                        {
+                            "id_city": city_id,
+                            "id_src": src_id,
+                            "id_dst": dst_id,
+                            "source_way_id": edge.get("source_way_id"),
+                            "road_type": edge.get("road_type", "service"),
+                            "length_m": edge.get("length_m"),
+                            "is_building_link": bool(
+                                edge.get("is_building_link", False)
+                            ),
+                            "name": _trim(edge.get("name")),
+                        }
+                    )
 
             if edge_rows:
                 try:

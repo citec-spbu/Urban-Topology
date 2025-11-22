@@ -37,8 +37,12 @@ def build_node_lookup(nodes_df: pd.DataFrame) -> Dict[str, Tuple[float, float]]:
 def default_center(nodes_df: pd.DataFrame) -> Tuple[float, float]:
     if nodes_df.empty:
         return (55.75, 37.61)
-    lat = nodes_df["latitude"].astype(float).mean()
-    lon = nodes_df["longitude"].astype(float).mean()
+
+    coords = nodes_df[["latitude", "longitude"]].dropna()
+    if coords.empty:
+        return (55.75, 37.61)
+    lat = coords["latitude"].astype(float).mean()
+    lon = coords["longitude"].astype(float).mean()
     return (float(lat), float(lon))
 
 
@@ -59,7 +63,13 @@ def add_edges_to_map(
             continue
         coords = [node_lookup[source], node_lookup[target]]
         layer = str(row.get("layer", "base")).lower()
-        is_building_link = bool(row.get("is_building_link", False))
+        raw_flag = row.get("is_building_link", False)
+        if pd.isna(raw_flag):
+            is_building_link = False
+        elif isinstance(raw_flag, str):
+            is_building_link = raw_flag.strip().lower() in {"1", "true", "t", "yes"}
+        else:
+            is_building_link = bool(raw_flag)
         color = (
             "#1f2937"
             if layer == "base"

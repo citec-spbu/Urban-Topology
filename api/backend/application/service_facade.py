@@ -76,7 +76,7 @@ async def graph_from_ids(city_id: int, regions_ids: List[int], regions: GeoDataF
     """Resolve region polygons by id list and delegate graph building to core services."""
     polygon = polygons_from_region(regions_ids=regions_ids, regions=regions)
     if polygon is None:
-        return None, None, None, None, None
+        return None, None, None, None, None, None, None
 
     gfp = await graph_from_poly(city_id=city_id, polygon=polygon)
     return gfp
