@@ -37,4 +37,13 @@ export const citiesApi = {
     );
     return data;
   },
+
+  downloadGraphExport: async (cityId: number, regionIds: number[]) => {
+    const response = await api.post(
+      `/city/graph/region/export/?city_id=${cityId}`,
+      regionIds,
+      { responseType: 'blob' }
+    );
+    return response.data as Blob;
+  },
 };

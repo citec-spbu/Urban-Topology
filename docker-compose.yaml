@@ -22,16 +22,18 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=fastapi_database
+      - DATABASE_URL=postgresql://user:password@postgres:5432/fastapi_database
+      - DADATA_TOKEN=${DADATA_TOKEN?DADATA_TOKEN environment variable must be set}
     volumes:
       - type: volume
         source: logsvol
         target: /app/logs
       - type: bind
-        source: ./api/fastapi_service #delete in prod and add copy
-        target: /app/fastapi_service
+        source: ./api/backend # delete in prod and add copy
+        target: /app/backend
       - type: bind
-        source: ./api/cities_osm
-        target: /app/fastapi_service/data/cities_osm
+        source: ./cities_pbf
+        target: /cities_pbf
     restart: always
     depends_on:
       - postgres

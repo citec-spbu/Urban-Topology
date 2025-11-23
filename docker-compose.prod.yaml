@@ -4,9 +4,11 @@
 services:
   postgres:
     image: postgis/postgis:12-3.3-alpine
+    env_file:
+      - secrets/prod-db.env
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=fastapi_database
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -20,17 +22,21 @@ services:
     build:
       context: api/
     image: fastapi_service
+    env_file:
+      - secrets/prod-db.env
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=fastapi_database
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - DADATA_TOKEN=${DADATA_TOKEN?DADATA_TOKEN environment variable must be set}
     volumes:
       - type: volume
         source: logsvol
         target: /app/logs
       - type: bind
-        source: ./api/cities_osm
-        target: /app/fastapi_service/data/cities_osm
+        source: ./cities_pbf
+        target: /cities_pbf
     restart: unless-stopped
     depends_on:
       - postgres

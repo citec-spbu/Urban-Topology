@@ -1,4 +1,4 @@
-import {useTown, useTownSection} from '@/entities/city'
+import {citiesApi, useTown, useTownSection} from '@/entities/city'
 import {useGraphLoader, useGraphState} from '@/entities/graph'
 import {MapComponent} from '@/widgets/MapWidget'
 import {RoadsComponent} from '@/widgets/RoadsWidget'
@@ -10,8 +10,10 @@ export const TownPage = () => {
     const {town, isLoading: isTownLoading, error: townError} = useTown(id ?? '');
     const {isMapActive, isRoadsActive, showMap, showRoads} = useTownSection();
     const {loadGraph, isLoading: isGraphLoading} = useGraphLoader();
-    const {graphData, setGraphData, setAreaName, hasGraph} = useGraphState();
+    const {graphData, setGraphData, setAreaName, areaName, hasGraph} = useGraphState();
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [lastRequest, setLastRequest] = useState<{ regionId?: number; polygon?: [number, number][] } | null>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const handleGraphLoad = async (params: { name: string; regionId?: number; polygon?: [number, number][] }) => {
         if (!id) return;
@@ -26,6 +28,7 @@ export const TownPage = () => {
                 polygon: params.polygon,
             });
             setGraphData(data);
+            setLastRequest({ regionId: params.regionId, polygon: params.polygon });
             showRoads();
         } catch (error: unknown) {
             const err = error as { response?: { data?: { detail?: string } }, message?: string };
@@ -35,9 +38,46 @@ export const TownPage = () => {
         }
     };
 
-    const handleDownload = () => {
-        console.log('Запрос на скачивание CSV...');
-        alert('Функционал скачивания будет реализован позже.');
+    const handleDownload = async () => {
+        if (!id) return;
+        if (!graphData) {
+            setErrorMessage('Сначала загрузите граф для выбранного района.');
+            return;
+        }
+        if (!lastRequest?.regionId) {
+            setErrorMessage('Выберите район на карте и дождитесь завершения загрузки графа.');
+            return;
+        }
+        if (lastRequest.polygon) {
+            setErrorMessage('Скачивание пока доступно только для районов.');
+            return;
+        }
+
+        try {
+            setIsDownloading(true);
+            const blob = await citiesApi.downloadGraphExport(Number(id), [lastRequest.regionId]);
+            const safeArea = areaName?.trim() || '';
+            const slug = safeArea
+                .toLowerCase()
+                .replace(/\s+/g, '-')
+                .replace(/[^a-z0-9а-яё_-]/gi, '') || `region-${lastRequest.regionId}`;
+            const fileName = `city-${id}-${slug}.zip`;
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error: unknown) {
+            const err = error as { response?: { data?: { detail?: string } }, message?: string };
+            const message = err?.response?.data?.detail || err?.message || 'Не удалось скачать архив с графом.';
+            setErrorMessage(message);
+            console.error('Ошибка скачивания CSV:', error);
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     if (isTownLoading) {
@@ -75,7 +115,12 @@ export const TownPage = () => {
 
             <div className={`${isRoadsActive ? 'flex' : 'hidden'} h-[calc(100vh-48px)] w-full flex-1 min-w-0`}>
                 <a id="roads-section"/>
-                <RoadsComponent graphData={graphData} onDownload={handleDownload} isActive={isRoadsActive}/>
+                <RoadsComponent
+                    graphData={graphData}
+                    onDownload={handleDownload}
+                    isActive={isRoadsActive}
+                    isDownloading={isDownloading}
+                />
             </div>
 
             <nav className="fixed top-[45vh] left-4 z-[999] flex flex-col gap-2">
@@ -96,7 +141,7 @@ export const TownPage = () => {
                 </button>
             </nav>
 
-            {isLoading && (
+            {(isLoading || isDownloading) && (
                 <div className="fixed inset-0 flex justify-center items-center z-[999] backdrop-blur-sm">
                     <div className="border-4 border-gray-200 border-t-[#008cff] rounded-full w-12 h-12 animate-spin"/>
                 </div>

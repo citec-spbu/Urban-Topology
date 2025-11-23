@@ -11,3 +11,9 @@ dadata
 osmium
 haversine
 networkx==3.0
+scipy
+pytest>=7.0,<8.0
+pytest-cov
+pytest-html
+aiosqlite
+trio
