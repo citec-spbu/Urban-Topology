@@ -8,7 +8,22 @@ from infrastructure.database import database, engine
 def _edge_spatial_condition(
     *, require_both_endpoints: bool, use_midpoint: bool
 ) -> str:
-    """Return SQL WHERE condition keeping full edge geometry inside polygon."""
+    """Return a SQL fragment describing how an edge must sit inside the polygon.
+
+    Args:
+        require_both_endpoints: When True, both segment endpoints must lie inside
+            the polygon in addition to any other checks.
+        use_midpoint: When True, permit edges if their midpoint is inside the
+            polygon even if endpoints fall outside; can be combined with the
+            endpoint requirement.
+
+    Returns:
+        SQL expression applying the requested geometry constraint:
+        - (True, False): both endpoints inside AND the full segment covered.
+        - (False, True): only the midpoint inside requirement.
+        - (True, True): either both-inside-and-covered OR midpoint-inside.
+        - (False, False): polygon fully covers the segment (coverage only).
+    """
 
     point_src = "ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326)"
     point_dst = "ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326)"
@@ -30,6 +45,7 @@ def _edge_spatial_condition(
     if require_both_endpoints and use_midpoint:
         return f"(({both_inside} AND {coverage_clause}) OR ST_Within({midpoint}, poly.g))"
 
+    # Neither midpoint nor endpoint containment requested: fall back to coverage.
     return coverage_clause
 
 

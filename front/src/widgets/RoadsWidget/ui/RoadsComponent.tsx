@@ -575,16 +575,16 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({ graphData, onDow
     const canDownload = Boolean(graphData) && (hasMainGraph || hasBuildingGraph || hasConnectorGraph)
 
     useEffect(() => {
-        if (!hasBuildingGraph && showBuildings) {
+        if (!hasBuildingGraph) {
             setShowBuildings(false)
         }
-    }, [hasBuildingGraph, showBuildings])
+    }, [hasBuildingGraph])
 
     useEffect(() => {
-        if (!hasConnectorGraph && showAccessLinks) {
+        if (!hasConnectorGraph) {
             setShowAccessLinks(false)
         }
-    }, [hasConnectorGraph, showAccessLinks])
+    }, [hasConnectorGraph])
 
     useEffect(() => {
         if (!hasMainGraph && showRoads) {
