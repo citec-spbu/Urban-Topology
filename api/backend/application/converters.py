@@ -2,7 +2,7 @@
 
 import io
 import zipfile
-from typing import Iterable, List, Sequence, Optional
+from typing import Any, Iterable, List, Sequence, Optional
 
 import pandas as pd
 
@@ -100,6 +100,9 @@ def graph_to_scheme(
             ],
         )
 
+    combined_nodes_str = merge_nodes_csv(points_str, access_nodes_str)
+    combined_edges_str = merge_edges_csv(edges_str, access_edges_str)
+
     return GraphBase(
         edges_csv=edges_str,
         points_csv=points_str,
@@ -108,6 +111,8 @@ def graph_to_scheme(
         metrics_csv=metrics_str,
         access_nodes_csv=access_nodes_str,
         access_edges_csv=access_edges_str,
+        combined_nodes_csv=combined_nodes_str,
+        combined_edges_csv=combined_edges_str,
     )
 
 
@@ -184,6 +189,19 @@ def _csv_to_dataframe(csv_content: Optional[str]) -> Optional[pd.DataFrame]:
     return pd.read_csv(io.StringIO(stripped), dtype=str)
 
 
+def _is_truthy(value: Any) -> bool:
+    """Return True if the given scalar value represents truth."""
+    if pd.isna(value):
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "y"}
+    return bool(value)
+
+
 def _export_csv_from_frames(frames: List[pd.DataFrame]) -> str:
     """Serialize concatenated frames into a CSV string."""
     valid_frames: List[pd.DataFrame] = []
@@ -226,7 +244,11 @@ def merge_nodes_csv(points_csv: str, access_nodes_csv: Optional[str]) -> str:
         for column in NODE_EXPORT_COLUMNS:
             if column not in access_df.columns:
                 access_df[column] = pd.NA
-        access_df["layer"] = "access"
+        access_df["layer"] = access_df["node_type"].apply(
+            lambda value: "building"
+            if isinstance(value, str) and value.lower() == "building"
+            else "connector"
+        )
         frames.append(access_df[NODE_EXPORT_COLUMNS])
 
     return _export_csv_from_frames(frames)
@@ -255,7 +277,9 @@ def merge_edges_csv(edges_csv: str, access_edges_csv: Optional[str]) -> str:
         for column in EDGE_EXPORT_COLUMNS:
             if column not in access_df.columns:
                 access_df[column] = pd.NA
-        access_df["layer"] = "access"
+        access_df["layer"] = access_df["is_building_link"].apply(
+            lambda value: "building" if _is_truthy(value) else "connector"
+        )
         frames.append(access_df[EDGE_EXPORT_COLUMNS])
 
     return _export_csv_from_frames(frames)
@@ -264,8 +288,12 @@ def merge_edges_csv(edges_csv: str, access_edges_csv: Optional[str]) -> str:
 def graph_to_zip_archive(graph: GraphBase) -> io.BytesIO:
     """Pack merged CSV payloads into an in-memory ZIP archive."""
     buffer = io.BytesIO()
-    nodes_csv = merge_nodes_csv(graph.points_csv, graph.access_nodes_csv)
-    edges_csv = merge_edges_csv(graph.edges_csv, graph.access_edges_csv)
+    nodes_csv = graph.combined_nodes_csv or merge_nodes_csv(
+        graph.points_csv, graph.access_nodes_csv
+    )
+    edges_csv = graph.combined_edges_csv or merge_edges_csv(
+        graph.edges_csv, graph.access_edges_csv
+    )
 
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("nodes.csv", nodes_csv)
