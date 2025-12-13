@@ -30,19 +30,39 @@ export const citiesApi = {
     return data;
   },
 
-  getGraphFromRegionID: async (cityId: number, regionId: number) => {
+  getGraphFromRegionID: async (
+    cityId: number,
+    regionId: number,
+    options?: { useCache?: boolean }
+  ) => {
     const { data } = await api.post<GraphData>(
-      `/city/graph/region/?city_id=${cityId}`,
-      [regionId]
+      `/city/graph/region/`,
+      [regionId],
+      {
+        params: {
+          city_id: cityId,
+          use_cache: options?.useCache ?? false,
+        },
+      }
     );
     return data;
   },
 
-  downloadGraphExport: async (cityId: number, regionIds: number[]) => {
+  downloadGraphExport: async (
+    cityId: number,
+    regionIds: number[],
+    options?: { useCache?: boolean }
+  ) => {
     const response = await api.post(
-      `/city/graph/region/export/?city_id=${cityId}`,
+      `/city/graph/region/export/`,
       regionIds,
-      { responseType: 'blob' }
+      {
+        params: {
+          city_id: cityId,
+          use_cache: options?.useCache ?? false,
+        },
+        responseType: 'blob',
+      }
     );
     return response.data as Blob;
   },

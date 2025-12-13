@@ -21,7 +21,7 @@ export const useGraphFromRegion = () => {
 
   return useMutation({
     mutationFn: ({ cityId, regionId }: { cityId: number; regionId: number }) =>
-      citiesApi.getGraphFromRegionID(cityId, regionId),
+      citiesApi.getGraphFromRegionID(cityId, regionId, { useCache: false }),
     onSuccess: (data, variables) => {
       queryClient.setQueryData(
         ['graph', variables.cityId, 'region', variables.regionId],

@@ -32,5 +32,7 @@ export interface GraphData {
   nodes_csv?: string,
   access_nodes_csv?: string,
   access_edges_csv?: string,
+  combined_nodes_csv?: string,
+  combined_edges_csv?: string,
   graph_name?: string
 }
