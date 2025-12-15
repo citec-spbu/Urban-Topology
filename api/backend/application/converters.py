@@ -1,8 +1,6 @@
-"""Convert database objects and metrics into convenient schema/CSV payloads."""
-
 import io
 import zipfile
-from typing import Any, Iterable, List, Sequence, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 import pandas as pd
 
@@ -35,7 +33,6 @@ EDGE_EXPORT_COLUMNS = [
 
 
 def list_to_csv_str(data: Iterable[Sequence], columns: List[str]):
-    """Return a CSV string and DataFrame for the given rows."""
     buffer = io.StringIO()
     df = pd.DataFrame(data, columns=columns)
     df.to_csv(buffer, index=False)
@@ -51,7 +48,6 @@ def graph_to_scheme(
     access_nodes: Optional[List[List]] = None,
     access_edges: Optional[List[List]] = None,
 ) -> GraphBase:
-    """Convert graph pieces into CSV blobs ready for GraphBase."""
     edges_str, _ = list_to_csv_str(edges, ["id", "id_way", "source", "target", "name"])
     points_str, _ = list_to_csv_str(points, ["id", "longitude", "latitude"])
     pprop_str, _ = list_to_csv_str(pprop, ["id", "property", "value"])
@@ -70,11 +66,19 @@ def graph_to_scheme(
         ],
     )
 
+    filtered_access_nodes = access_nodes
+    filtered_access_edges = access_edges
+    if access_nodes and access_edges:
+        filtered_access_nodes, filtered_access_edges = _filter_access_component(
+            access_nodes,
+            access_edges,
+        )
+
     access_nodes_str = None
     access_edges_str = None
-    if access_nodes is not None:
+    if filtered_access_nodes is not None:
         access_nodes_str, _ = list_to_csv_str(
-            access_nodes,
+            filtered_access_nodes,
             [
                 "id",
                 "node_type",
@@ -85,9 +89,9 @@ def graph_to_scheme(
                 "name",
             ],
         )
-    if access_edges is not None:
+    if filtered_access_edges is not None:
         access_edges_str, _ = list_to_csv_str(
-            access_edges,
+            filtered_access_edges,
             [
                 "id",
                 "source",
@@ -117,12 +121,10 @@ def graph_to_scheme(
 
 
 def point_obj_to_list(db_record) -> List:
-    """Return the point record as a list for serialization."""
     return [db_record.id, db_record.longitude, db_record.latitude]
 
 
 def edge_obj_to_list(db_record) -> List:
-    """Return the edge record as a list for serialization."""
     return [
         db_record.id,
         db_record.id_way,
@@ -133,17 +135,14 @@ def edge_obj_to_list(db_record) -> List:
 
 
 def record_obj_to_wprop(record) -> List:
-    """Convert a way property record into a serializable list."""
     return [record.id_way, record.property, record.value]
 
 
 def record_obj_to_pprop(record) -> List:
-    """Convert a point property record into a serializable list."""
     return [record.id_point, record.property, record.value]
 
 
 def access_node_obj_to_list(record) -> List:
-    """Convert an access-node row into a serializable list."""
     return [
         record.id,
         record.node_type,
@@ -156,7 +155,6 @@ def access_node_obj_to_list(record) -> List:
 
 
 def access_edge_obj_to_list(record) -> List:
-    """Convert an access-edge row into a serializable list."""
     return [
         record.id,
         record.id_src,
@@ -170,7 +168,6 @@ def access_edge_obj_to_list(record) -> List:
 
 
 def point_to_scheme(point) -> Optional[PointBase]:
-    """Convert a point ORM object into a PointBase schema."""
     if point is None:
         return None
 
@@ -178,7 +175,6 @@ def point_to_scheme(point) -> Optional[PointBase]:
 
 
 def _csv_to_dataframe(csv_content: Optional[str]) -> Optional[pd.DataFrame]:
-    """Return a DataFrame for a CSV string, if content is present."""
     if not csv_content:
         return None
 
@@ -190,7 +186,6 @@ def _csv_to_dataframe(csv_content: Optional[str]) -> Optional[pd.DataFrame]:
 
 
 def _is_truthy(value: Any) -> bool:
-    """Return True if the given scalar value represents truth."""
     if pd.isna(value):
         return False
     if isinstance(value, bool):
@@ -202,8 +197,100 @@ def _is_truthy(value: Any) -> bool:
     return bool(value)
 
 
+def _normalize_identifier(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _largest_access_component_ids(
+    access_nodes: List[List], access_edges: List[List]
+) -> Optional[Set[str]]:
+    node_map: Dict[str, List] = {}
+    for row in access_nodes:
+        if not row:
+            continue
+        node_id = _normalize_identifier(row[0])
+        if not node_id:
+            continue
+        node_map[node_id] = row
+
+    if len(node_map) <= 1:
+        return None
+
+    adjacency: Dict[str, Set[str]] = {node_id: set() for node_id in node_map}
+    has_valid_edges = False
+    for edge in access_edges:
+        if len(edge) < 3:
+            continue
+        src = _normalize_identifier(edge[1])
+        dst = _normalize_identifier(edge[2])
+        if not src or not dst:
+            continue
+        if src not in node_map or dst not in node_map:
+            continue
+        adjacency.setdefault(src, set()).add(dst)
+        adjacency.setdefault(dst, set()).add(src)
+        has_valid_edges = True
+
+    if not has_valid_edges:
+        return None
+
+    visited: Set[str] = set()
+    largest_component: Set[str] = set()
+    largest_edge_score = -1
+
+    for node_id in node_map:
+        if node_id in visited:
+            continue
+        stack = [node_id]
+        component: Set[str] = set()
+        edge_score = 0
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.add(current)
+            neighbors = adjacency.get(current, set())
+            edge_score += len(neighbors)
+            for neighbor in neighbors:
+                if neighbor not in visited:
+                    stack.append(neighbor)
+        if len(component) > len(largest_component) or (
+            len(component) == len(largest_component) and edge_score > largest_edge_score
+        ):
+            largest_component = component
+            largest_edge_score = edge_score
+
+    if not largest_component or len(largest_component) == len(node_map):
+        return None
+
+    return largest_component
+
+
+def _filter_access_component(
+    access_nodes: List[List], access_edges: List[List]
+) -> Tuple[List[List], List[List]]:
+    keep_ids = _largest_access_component_ids(access_nodes, access_edges)
+    if not keep_ids:
+        return access_nodes, access_edges
+
+    filtered_nodes = [row for row in access_nodes if _normalize_identifier(row[0]) in keep_ids]
+    filtered_edges: List[List] = []
+    for row in access_edges:
+        if len(row) < 3:
+            continue
+        src = _normalize_identifier(row[1])
+        dst = _normalize_identifier(row[2])
+        if src in keep_ids and dst in keep_ids:
+            filtered_edges.append(row)
+
+    return filtered_nodes, filtered_edges
+
+
 def _export_csv_from_frames(frames: List[pd.DataFrame]) -> str:
-    """Serialize concatenated frames into a CSV string."""
     valid_frames: List[pd.DataFrame] = []
     for frame in frames:
         if frame is None or frame.empty:
@@ -222,7 +309,6 @@ def _export_csv_from_frames(frames: List[pd.DataFrame]) -> str:
 
 
 def merge_nodes_csv(points_csv: str, access_nodes_csv: Optional[str]) -> str:
-    """Combine base graph nodes with optional access-layer nodes."""
     frames: List[pd.DataFrame] = []
 
     base_df = _csv_to_dataframe(points_csv)
@@ -255,7 +341,6 @@ def merge_nodes_csv(points_csv: str, access_nodes_csv: Optional[str]) -> str:
 
 
 def merge_edges_csv(edges_csv: str, access_edges_csv: Optional[str]) -> str:
-    """Combine base edges with optional access-layer edges."""
     frames: List[pd.DataFrame] = []
 
     base_df = _csv_to_dataframe(edges_csv)
@@ -286,7 +371,6 @@ def merge_edges_csv(edges_csv: str, access_edges_csv: Optional[str]) -> str:
 
 
 def graph_to_zip_archive(graph: GraphBase) -> io.BytesIO:
-    """Pack merged CSV payloads into an in-memory ZIP archive."""
     buffer = io.BytesIO()
     nodes_csv = graph.combined_nodes_csv or merge_nodes_csv(
         graph.points_csv, graph.access_nodes_csv
