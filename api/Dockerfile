@@ -1,4 +1,4 @@
-FROM python:3.9.6-slim
+FROM python:3.12.3-slim
 
 ENV JAVA_HOME=/opt/java/openjdk
 COPY --from=eclipse-temurin:11 $JAVA_HOME $JAVA_HOME

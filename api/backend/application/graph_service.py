@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-from typing import List
 
 import networkx as nx
 
@@ -13,6 +12,7 @@ from application.converters import (
     record_obj_to_pprop,
     access_node_obj_to_list,
     access_edge_obj_to_list,
+    filter_isolated_components,
 )
 from application.ingestion.utils import add_graph_to_db
 from infrastructure.repositories.cities import CityRepository
@@ -96,7 +96,6 @@ async def graph_from_poly(city_id, polygon):
 
     # Retrieve points inside the polygon (PostGIS)
     res_points = await repo_graph.points_in_polygon(city_id, polygon_wkt)
-    points = list(map(point_obj_to_list, res_points))
 
     # Filter edges by polygon bounds and road types (PostGIS)
     road_types = (
@@ -120,9 +119,26 @@ async def graph_from_poly(city_id, polygon):
         require_both_endpoints=True,
         use_midpoint=False,
     )
-    edges = list(map(edge_obj_to_list, res_edges))
 
-    # Collect property identifiers from selected entities
+    # Fetch access layer data
+    access_nodes_raw = await repo_graph.access_nodes_in_polygon(
+        city_id=city_id, polygon_wkt=polygon_wkt
+    )
+    access_edges_raw = await repo_graph.access_edges_in_polygon(
+        city_id=city_id, polygon_wkt=polygon_wkt
+    )
+
+    # Convert ORM objects to list format
+    points = list(map(point_obj_to_list, res_points))
+    edges = list(map(edge_obj_to_list, res_edges))
+    access_nodes = list(
+        map(access_node_obj_to_list, access_nodes_raw if access_nodes_raw else [])
+    )
+    access_edges = list(
+        map(access_edge_obj_to_list, access_edges_raw if access_edges_raw else [])
+    )
+
+    # Collect property identifiers before filtering
     ways_prop_ids = {e[1] for e in edges}
     points_prop_ids = {p[0] for p in points}
 
@@ -135,14 +151,20 @@ async def graph_from_poly(city_id, polygon):
     oneway_ids = await repo_graph.oneway_ids(city_id=city_id)
     metrics = await calc_metrics(points, edges, oneway_ids)
 
-    access_nodes_raw = await repo_graph.access_nodes_in_polygon(
-        city_id=city_id, polygon_wkt=polygon_wkt
+    print(
+        f"Before filtering: points={len(points)}, edges={len(edges)}, access_nodes={len(access_nodes)}, access_edges={len(access_edges)}"
     )
-    access_edges_raw = await repo_graph.access_edges_in_polygon(
-        city_id=city_id, polygon_wkt=polygon_wkt
+
+    # Filter isolated components with metrics
+    points, edges, metrics = filter_isolated_components(
+        points=points,
+        edges=edges,
+        metrics=metrics,
+        access_nodes=access_nodes if access_nodes else None,
+        access_edges=access_edges if access_edges else None,
+        snap_distance_m=10.0,
+        enabled=True,
     )
-    access_nodes = list(map(access_node_obj_to_list, access_nodes_raw))
-    access_edges = list(map(access_edge_obj_to_list, access_edges_raw))
 
     return (
         points,
@@ -150,8 +172,8 @@ async def graph_from_poly(city_id, polygon):
         points_prop,
         ways_prop,
         metrics,
-        access_nodes,
-        access_edges,
+        None,  # access_nodes now merged into points
+        None,  # access_edges now merged into edges
     )
 
 
@@ -161,9 +183,16 @@ async def calc_metrics(points, edges, oneway_ids):
         return []
 
     points_list = [point[0] for point in points]
-    edges_list = [(edge[2], edge[3]) for edge in edges]
+
+    # Extract source/target from unified edge format
+    # Unified edges: [id, source, target, id_way, source_way_id, road_type, length_m, is_building_link, name, layer]
+    edges_list = [(edge[1], edge[2]) for edge in edges if len(edge) > 2]
+
+    # For reversed edges, check source_way_id (index 4) instead of id_way for oneway determination
     reversed_edges_list = [
-        (edge[3], edge[2]) for edge in edges if edge[1] not in oneway_ids
+        (edge[2], edge[1])
+        for edge in edges
+        if len(edge) > 4 and edge[4] not in oneway_ids
     ]
 
     G = nx.DiGraph()

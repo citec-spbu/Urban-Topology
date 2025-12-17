@@ -14,6 +14,11 @@ interface Node {
     betweenness_value?: string
     radius_value?: string
     color_value?: string
+    layer?: string  // 'base' или 'access'
+    node_type?: string  // 'graph', 'building' и т.д.
+    source_type?: string
+    source_id?: string
+    name?: string
 }
 
 interface Edge {
@@ -22,24 +27,8 @@ interface Edge {
     from: string
     to: string
     name?: string
-}
-
-interface AccessNode {
-    lat: number
-    lon: number
-    node_type: string
-    source_type?: string
-    source_id?: string
-    name?: string
-}
-
-interface AccessEdge {
-    id?: string
-    from: string
-    to: string
-    road_type?: string
-    name?: string
-    isBuildingLink?: boolean
+    layer?: string  // 'base' или 'access'
+    is_building_link?: boolean
 }
 
 interface RoadsComponentProps {
@@ -219,12 +208,10 @@ const MapResizer: React.FC<{ active?: boolean; bounds?: LatLngBoundsExpression |
 export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDownload, isActive, isDownloading}) => {
     const [showRoads, setShowRoads] = useState(true)
     const [showBuildings, setShowBuildings] = useState(false)
+    const [showPedestrianLinks, setShowPedestrianLinks] = useState(false)
     let nodes: Record<string, Node> = {}
     let edges: Edge[] = []
-    let accessNodes: Record<string, AccessNode> = {}
-    let accessEdges: AccessEdge[] = []
     let invalidPointRows = 0
-    let invalidAccessRows = 0
 
     if (hasCsvGraphData(graphData)) {
         const metricRows = parseCSV(graphData.metrics_csv);
@@ -263,6 +250,11 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                 betweenness_value: metric.betweenness,
                 radius_value: metric.radius,
                 color_value: metric.color,
+                layer: row.layer,
+                node_type: row.node_type,
+                source_type: row.source_type,
+                source_id: row.source_id,
+                name: row.name,
             }
         })
         if (invalidPointRows) {
@@ -271,122 +263,143 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                 examples: invalidNodeSamples,
             })
         }
+        
+        console.log('Total nodes parsed:', Object.keys(nodes).length);
 
         const edgeRows = parseCSV(graphData.edges_csv);
-        edges = edgeRows
-            .map((row) => ({
-                id: row.id,
-                way_id: row.id_way || row.way_id,
-                from: row.source || row.from || row.id_src || '',
-                to: row.target || row.to || row.id_dist || '',
-                name: row.name,
-            }))
-            .filter((edge) => edge.from && edge.to);
+        console.log('Parsed edge rows:', edgeRows.length);
+        
+        const mappedEdges = edgeRows.map((row) => ({
+            id: row.id,
+            way_id: row.id_way || row.way_id,
+            from: row.source || row.from || row.id_src || '',
+            to: row.target || row.to || row.id_dist || '',
+            name: row.name,
+            layer: row.layer,
+            is_building_link: parseBool(row.is_building_link),
+        }));
+        
+        const edgesWithoutEndpoints = mappedEdges.filter(e => !e.from || !e.to);
+        if (edgesWithoutEndpoints.length > 0) {
+            console.warn('Edges without from/to:', edgesWithoutEndpoints.length, edgesWithoutEndpoints.slice(0, 3));
+        }
+        
+        edges = mappedEdges.filter((edge) => edge.from && edge.to);
+        
+        console.log('Edges after filtering (from && to):', edges.length);
     } else if (graphData && typeof graphData === 'object') {
         nodes = graphData.nodes && typeof graphData.nodes === 'object' ? graphData.nodes as Record<string, Node> : {}
         const edgesObj = graphData.edges && typeof graphData.edges === 'object' ? graphData.edges : {}
         edges = Object.values(edgesObj ?? {}) as Edge[]
     }
 
-    if (graphData && typeof graphData === 'object') {
-        if (typeof (graphData as any).access_nodes_csv === 'string') {
-            const accessNodeRows = parseCSV((graphData as any).access_nodes_csv)
-            const invalidAccessSamples: string[] = []
-            accessNodeRows.forEach((row) => {
-                const id = row.id?.trim()
-                if (!id) return
-                const lat = toNumber(row.latitude || row.lat)
-                const lon = toNumber(row.longitude || row.lon)
-                if (lat === undefined || lon === undefined) {
-                    invalidAccessRows += 1
-                    if (invalidAccessSamples.length < 5) {
-                        invalidAccessSamples.push(id || JSON.stringify(row))
-                    }
-                    return
-                }
-                accessNodes[id] = {
-                    lat,
-                    lon,
-                    node_type: row.node_type || 'intersection',
-                    source_type: row.source_type,
-                    source_id: row.source_id,
-                    name: row.name,
-                }
-            })
-            if (invalidAccessRows) {
-                console.warn('Пропущены точки доступа из-за некорректных координат', {
-                    skipped: invalidAccessRows,
-                    examples: invalidAccessSamples,
-                })
-            }
-        }
-
-        if (typeof (graphData as any).access_edges_csv === 'string') {
-            const accessEdgeRows = parseCSV((graphData as any).access_edges_csv)
-            accessEdges = accessEdgeRows
-                .map((row) => ({
-                    id: row.id,
-                    from: row.source || row.from || row.id_src || '',
-                    to: row.target || row.to || row.id_dst || '',
-                    road_type: row.road_type,
-                    name: row.name,
-                    isBuildingLink: parseBool(row.is_building_link),
-                }))
-                .filter((edge) => edge.from && edge.to)
-        }
-    }
+    // Note: with unified format, access_nodes_csv and access_edges_csv are now null
+    // All data (base + access) is merged into points_csv and edges_csv with layer metadata
 
     const safeNodes: Record<string, Node> = (nodes && typeof nodes === 'object' && !Array.isArray(nodes)) ? nodes : {}
-    const firstNode = Object.values(safeNodes)[0]
-    const firstAccessNode = Object.values(accessNodes)[0]
+    
+    // Разделяем узлы по слоям
+    const roadNodes = Object.entries(safeNodes).reduce((acc, [id, node]) => {
+        if (node.layer === 'access') return acc
+        acc[id] = node
+        return acc
+    }, {} as Record<string, Node>)
+    
+    const buildingNodes = Object.entries(safeNodes).reduce((acc, [id, node]) => {
+        if (node.layer !== 'access' || node.node_type !== 'building') return acc
+        acc[id] = node
+        return acc
+    }, {} as Record<string, Node>)
+    
+    // Разделяем рёбра по слоям
+    const roadEdges = edges.filter(e => e.layer !== 'access')
+    const buildingEdges = edges.filter(e => e.layer === 'access' && !e.is_building_link)
+    const pedestrianEdges = edges.filter(e => e.layer === 'access' && e.is_building_link)
+    
+    console.log('Edge counts:', {
+        total: edges.length,
+        road: roadEdges.length,
+        building: buildingEdges.length,
+        pedestrian: pedestrianEdges.length,
+        accessTotal: edges.filter(e => e.layer === 'access').length,
+        sampleAccessEdge: edges.find(e => e.layer === 'access'),
+        sampleBuildingEdge: buildingEdges[0],
+        samplePedestrianEdge: pedestrianEdges[0],
+    })
+    
+    // Debug: проверяем есть ли узлы для access рёбер
+    if (buildingEdges.length > 0) {
+        const firstBuildingEdge = buildingEdges[0]
+        const fromNode = buildingNodes[firstBuildingEdge.from] || roadNodes[firstBuildingEdge.from]
+        const toNode = buildingNodes[firstBuildingEdge.to] || roadNodes[firstBuildingEdge.to]
+        console.log('Building edge lookup:', {
+            edge: firstBuildingEdge,
+            fromNode: fromNode ? 'found' : 'MISSING',
+            toNode: toNode ? 'found' : 'MISSING',
+            totalBuildingNodes: Object.keys(buildingNodes).length,
+            totalRoadNodes: Object.keys(roadNodes).length,
+        })
+    }
+    
+    const firstNode = Object.values(roadNodes)[0] || Object.values(buildingNodes)[0]
     const center: [number, number] = firstNode && getNodeLatLng(firstNode).length === 2
         ? getNodeLatLng(firstNode)
-        : firstAccessNode
-            ? [firstAccessNode.lat, firstAccessNode.lon]
-            : [55.75, 37.61]
+        : [55.75, 37.61]
 
     const bounds = useMemo(() => {
         const merged: Record<string, Node> = {}
         if (showRoads) {
-            Object.entries(safeNodes).forEach(([id, node]) => {
+            Object.entries(roadNodes).forEach(([id, node]) => {
                 merged[id] = node
             })
         }
         if (showBuildings) {
-            Object.entries(accessNodes).forEach(([id, node]) => {
-                merged[`access-${id}`] = {lat: node.lat, lon: node.lon, way_id: ''}
+            Object.entries(buildingNodes).forEach(([id, node]) => {
+                merged[id] = node
+            })
+        }
+        if (showPedestrianLinks && showBuildings) {
+            Object.entries(buildingNodes).forEach(([id, node]) => {
+                merged[`ped-${id}`] = {lat: node.lat, lon: node.lon, way_id: ''}
             })
         }
         if (!Object.keys(merged).length) {
-            return computeBounds(safeNodes)
+            return computeBounds(roadNodes)
         }
         return computeBounds(merged)
-    }, [safeNodes, accessNodes, showRoads, showBuildings])
+    }, [roadNodes, buildingNodes, showRoads, showBuildings, showPedestrianLinks])
 
-    const nodeCount = safeNodes ? Object.keys(safeNodes).length : 0
-    const hasMainGraph = nodeCount > 0 && edges && edges.length > 0
-    const hasAccessGraph = accessNodes && Object.keys(accessNodes).length > 0 && accessEdges && accessEdges.length > 0
-    const displayAccessGraph = showBuildings && hasAccessGraph
-    const displayMainGraph = showRoads && hasMainGraph
-    const canDownload = Boolean(graphData) && (hasMainGraph || hasAccessGraph)
+    const hasRoadData = Object.keys(roadNodes).length > 0 || roadEdges.length > 0
+    const hasBuildingData = Object.keys(buildingNodes).length > 0 || buildingEdges.length > 0
+    const hasPedestrianData = pedestrianEdges.length > 0
+    const displayRoads = showRoads && hasRoadData
+    const displayBuildings = showBuildings && hasBuildingData
+    const displayPedestrian = showPedestrianLinks && hasPedestrianData && showBuildings
+    const canDownload = Boolean(graphData) && (hasRoadData || hasBuildingData)
 
     useEffect(() => {
-        if (!hasAccessGraph && showBuildings) {
+        if (!hasBuildingData && showBuildings) {
             setShowBuildings(false)
         }
-    }, [hasAccessGraph, showBuildings])
+    }, [hasBuildingData, showBuildings])
 
     useEffect(() => {
-        if (!hasMainGraph && showRoads) {
+        if (!hasRoadData && showRoads) {
             setShowRoads(false)
         }
-    }, [hasMainGraph, showRoads])
+    }, [hasRoadData, showRoads])
 
-    if (!hasMainGraph && !hasAccessGraph) {
+    useEffect(() => {
+        if (!hasPedestrianData && showPedestrianLinks) {
+            setShowPedestrianLinks(false)
+        }
+    }, [hasPedestrianData, showPedestrianLinks])
+
+    if (!hasRoadData && !hasBuildingData) {
         return (
             <div className="p-8 text-center text-gray-500 space-y-2">
                 <div>Нет данных для отображения графа.</div>
-                {(invalidPointRows > 0 || invalidAccessRows > 0) && (
+                {invalidPointRows > 0 && (
                     <div className="text-sm text-red-600">
                         Обнаружены строки с некорректными координатами. Проверьте исходные данные региона или повторите загрузку.
                     </div>
@@ -410,42 +423,57 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                     attribution="&copy; OpenStreetMap contributors"
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
-                {displayMainGraph && edges.map((edge, idx) => {
-                    const from = safeNodes[edge.from]
-                    const to = safeNodes[edge.to]
+                {/* Дороги (base layer edges) */}
+                {displayRoads && roadEdges.map((edge, idx) => {
+                    const from = roadNodes[edge.from]
+                    const to = roadNodes[edge.to]
                     if (!from || !to) return null
                     return (
                         <Polyline
                             key={`road-${edge.id || idx}`}
                             positions={[getNodeLatLng(from), getNodeLatLng(to)]}
-                            pathOptions={{color: '#85818c', weight: 4}}
+                            pathOptions={{color: '#64748b', weight: 3, opacity: 0.8}}
                         />
                     )
                 })}
-                {displayAccessGraph && accessEdges.map((edge, idx) => {
-                    const from = accessNodes[edge.from]
-                    const to = accessNodes[edge.to]
+                
+                {/* Связи зданий (access layer edges, not building links) */}
+                {displayBuildings && buildingEdges.map((edge, idx) => {
+                    const from = buildingNodes[edge.from] || roadNodes[edge.from]
+                    const to = buildingNodes[edge.to] || roadNodes[edge.to]
                     if (!from || !to) return null
                     return (
                         <Polyline
-                            key={`access-${edge.id || idx}`}
-                            positions={[[from.lat, from.lon], [to.lat, to.lon]]}
-                            pathOptions={{
-                                color: edge.isBuildingLink ? '#16a34a' : '#f97316',
-                                weight: edge.isBuildingLink ? 3 : 4,
-                                opacity: 0.9,
-                            }}
+                            key={`building-${edge.id || idx}`}
+                            positions={[getNodeLatLng(from), getNodeLatLng(to)]}
+                            pathOptions={{color: '#ea580c', weight: 2, opacity: 0.7, dashArray: '5, 5'}}
                         />
                     )
                 })}
-                {displayMainGraph && Object.entries(safeNodes).map(([id, node]) => (
+                
+                {/* Пешеходные связи (building links) */}
+                {displayPedestrian && pedestrianEdges.map((edge, idx) => {
+                    const from = buildingNodes[edge.from] || roadNodes[edge.from]
+                    const to = roadNodes[edge.to] || buildingNodes[edge.to]
+                    if (!from || !to) return null
+                    return (
+                        <Polyline
+                            key={`pedestrian-${edge.id || idx}`}
+                            positions={[getNodeLatLng(from), getNodeLatLng(to)]}
+                            pathOptions={{color: '#f59e0b', weight: 2, opacity: 0.8}}
+                        />
+                    )
+                })}
+                
+                {/* Узлы дорог (base layer nodes) */}
+                {displayRoads && Object.entries(roadNodes).map(([id, node]) => (
                     <CircleMarker
                         key={id}
                         center={getNodeLatLng(node)}
-                        radius={Number(node.radius_value) || 5}
+                        radius={Number(node.radius_value) || 4}
                         pathOptions={{
-                            color: node.color_value || '#008cff',
-                            fillColor: node.color_value || '#008cff',
+                            color: node.color_value || '#0ea5e9',
+                            fillColor: node.color_value || '#0ea5e9',
                             fillOpacity: 0.8
                         }}
                     >
@@ -462,20 +490,22 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                         </Popup>
                     </CircleMarker>
                 ))}
-                {displayAccessGraph && Object.entries(accessNodes).map(([id, node]) => (
+                
+                {/* Здания (access layer nodes) */}
+                {displayBuildings && Object.entries(buildingNodes).map(([id, node]) => (
                     <CircleMarker
-                        key={`access-node-${id}`}
-                        center={[node.lat, node.lon]}
-                        radius={node.node_type === 'building' ? 6 : 4}
+                        key={`building-${id}`}
+                        center={getNodeLatLng(node)}
+                        radius={6}
                         pathOptions={{
-                            color: node.node_type === 'building' ? '#16a34a' : '#f97316',
-                            fillColor: node.node_type === 'building' ? '#16a34a' : '#f97316',
+                            color: '#16a34a',
+                            fillColor: '#16a34a',
                             fillOpacity: 0.85,
                         }}
                     >
                         <Popup>
                             <div className="text-sm">
-                                <b>{node.node_type === 'building' ? 'Здание' : 'Перекрёсток'}</b><br/>
+                                <b>Здание</b><br/>
                                 ID: {id}<br/>
                                 Источник: {node.source_type} {node.source_id}<br/>
                                 {node.name ? <>Название: {node.name}<br/></> : null}
@@ -485,26 +515,38 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                 ))}
             </MapContainer>
             <div
-                className="absolute top-5 right-5 w-52 bg-white rounded shadow p-3 space-y-2 border border-gray-200 z-[1200] pointer-events-auto"
+                className="absolute top-5 right-5 w-56 bg-white rounded shadow p-4 space-y-3 border border-gray-200 z-[1200] pointer-events-auto"
             >
                 <div className="text-sm font-semibold text-gray-700">Слои карты</div>
-                <label className={`flex items-center gap-2 text-sm ${!hasMainGraph ? 'opacity-50' : ''}`}>
+                <label className={`flex items-center gap-2 text-sm ${!hasRoadData ? 'opacity-50' : ''}`}>
                     <input
                         type="checkbox"
                         checked={showRoads}
-                        disabled={!hasMainGraph}
+                        disabled={!hasRoadData}
                         onChange={(e) => setShowRoads(e.target.checked)}
                     />
-                    Дороги
+                    <span className="flex-1">Дороги</span>
+                    <span className="inline-block w-3 h-3 bg-sky-400 rounded"></span>
                 </label>
-                <label className={`flex items-center gap-2 text-sm ${!hasAccessGraph ? 'opacity-50' : ''}`}>
+                <label className={`flex items-center gap-2 text-sm ${!hasBuildingData ? 'opacity-50' : ''}`}>
                     <input
                         type="checkbox"
                         checked={showBuildings}
-                        disabled={!hasAccessGraph}
+                        disabled={!hasBuildingData}
                         onChange={(e) => setShowBuildings(e.target.checked)}
                     />
-                    Здания и узлы
+                    <span className="flex-1">Здания</span>
+                    <span className="inline-block w-3 h-3 bg-amber-400 rounded"></span>
+                </label>
+                <label className={`flex items-center gap-2 text-sm ${!hasPedestrianData || !showBuildings ? 'opacity-50' : ''}`}>
+                    <input
+                        type="checkbox"
+                        checked={showPedestrianLinks}
+                        disabled={!hasPedestrianData || !showBuildings}
+                        onChange={(e) => setShowPedestrianLinks(e.target.checked)}
+                    />
+                    <span className="flex-1">Пешеходные связи</span>
+                    <span className="inline-block w-3 h-3 bg-green-500 rounded"></span>
                 </label>
             </div>
             <div className="absolute bottom-5 right-5 z-[1200] pointer-events-auto">
