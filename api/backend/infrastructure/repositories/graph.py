@@ -5,50 +5,6 @@ from sqlalchemy import text
 from infrastructure.database import database, engine
 
 
-def _edge_spatial_condition(
-    *, require_both_endpoints: bool, use_midpoint: bool
-) -> str:
-    """Return a SQL fragment describing how an edge must sit inside the polygon.
-
-    Args:
-        require_both_endpoints: When True, both segment endpoints must lie inside
-            the polygon in addition to any other checks.
-        use_midpoint: When True, permit edges if their midpoint is inside the
-            polygon even if endpoints fall outside; can be combined with the
-            endpoint requirement.
-
-    Returns:
-        SQL expression applying the requested geometry constraint:
-        - (True, False): both endpoints inside AND the full segment covered.
-        - (False, True): only the midpoint inside requirement.
-        - (True, True): either both-inside-and-covered OR midpoint-inside.
-        - (False, False): polygon fully covers the segment (coverage only).
-    """
-
-    point_src = "ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326)"
-    point_dst = "ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326)"
-    midpoint = f"""
-        ST_LineInterpolatePoint(
-            ST_MakeLine({point_src}, {point_dst}),
-            0.5
-        )
-    """
-    coverage_clause = f"ST_Covers(poly.g, ST_MakeLine({point_src}, {point_dst}))"
-    both_inside = f"ST_Within({point_src}, poly.g) AND ST_Within({point_dst}, poly.g)"
-
-    if require_both_endpoints and not use_midpoint:
-        return f"({both_inside} AND {coverage_clause})"
-
-    if not require_both_endpoints and use_midpoint:
-        return f"ST_Within({midpoint}, poly.g)"
-
-    if require_both_endpoints and use_midpoint:
-        return f"(({both_inside} AND {coverage_clause}) OR ST_Within({midpoint}, poly.g))"
-
-    # Neither midpoint nor endpoint containment requested: fall back to coverage.
-    return coverage_clause
-
-
 class GraphRepository:
     async def points_in_bbox(
         self, city_id: int, bbox: tuple[float, float, float, float]
@@ -74,6 +30,7 @@ class GraphRepository:
         )
 
     async def property_id(self, name: str) -> int:
+        # Use raw SQL here because fetch_one + TextClause crashes on some databases versions
         row = await database.fetch_one(
             'SELECT id FROM "Properties" WHERE property = :name', values={"name": name}
         )
@@ -87,6 +44,7 @@ class GraphRepository:
         prop_id_highway: int,
         highway_types: Iterable[str],
     ) -> Sequence[tuple]:
+        # :types parameter contains an array of highway strings
         q = """
             WITH named_streets AS (
                 SELECT e.id, e.id_way, e.id_src, e.id_dist, wp_n.value AS value
@@ -144,6 +102,7 @@ class GraphRepository:
         return await database.fetch_all(q, values={"ids": ids})
 
     def point_props_via_temp(self, point_ids: Iterable[int]) -> Sequence[tuple]:
+        # Create a temporary table here so repository clients do not deal with raw SQL
         ids = list(point_ids)
         if not ids:
             return []
@@ -223,10 +182,45 @@ class GraphRepository:
             a) both endpoints are inside polygon (default), or
             b) midpoint of the segment is inside (use_midpoint=True)
         """
-        condition = _edge_spatial_condition(
-            require_both_endpoints=require_both_endpoints,
-            use_midpoint=use_midpoint,
-        )
+        condition = """
+            (ST_Within(ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326), poly.g)
+             AND ST_Within(ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326), poly.g))
+        """
+        if not require_both_endpoints and use_midpoint:
+            # Alternative: ensure only the segment midpoint is inside the polygon
+            condition = """
+                ST_Within(
+                    ST_LineInterpolatePoint(
+                        ST_MakeLine(
+                            ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326),
+                            ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326)
+                        ),
+                        0.5
+                    ),
+                    poly.g
+                )
+            """
+        elif use_midpoint:
+            # Alternative: either both endpoints or the midpoint must stay inside
+            condition = """
+                (
+                    (ST_Within(ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326), poly.g)
+                     AND ST_Within(ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326), poly.g))
+                )
+                OR
+                (
+                    ST_Within(
+                        ST_LineInterpolatePoint(
+                            ST_MakeLine(
+                                ST_SetSRID(ST_MakePoint(ps.longitude, ps.latitude), 4326),
+                                ST_SetSRID(ST_MakePoint(pd.longitude, pd.latitude), 4326)
+                            ),
+                            0.5
+                        ),
+                        poly.g
+                    )
+                )
+            """
 
         q = f"""
             WITH poly AS (
@@ -304,13 +298,7 @@ class GraphRepository:
     async def access_edges_in_polygon(
         self, city_id: int, polygon_wkt: str
     ) -> Sequence[tuple]:
-        line_expr = """
-            ST_MakeLine(
-                ST_SetSRID(ST_MakePoint(ns.longitude, ns.latitude), 4326),
-                ST_SetSRID(ST_MakePoint(nd.longitude, nd.latitude), 4326)
-            )
-        """
-        q = f"""
+        q = """
             WITH poly AS (
                 SELECT ST_GeomFromText(:wkt, 4326) AS g
             )
@@ -329,8 +317,7 @@ class GraphRepository:
             WHERE ae.id_city = :city_id
               AND ST_Within(ST_SetSRID(ST_MakePoint(ns.longitude, ns.latitude), 4326), poly.g)
               AND ST_Within(ST_SetSRID(ST_MakePoint(nd.longitude, nd.latitude), 4326), poly.g)
-                            AND ST_Covers(poly.g, {line_expr})
-          """
+        """
         return await database.fetch_all(
             q,
             values={

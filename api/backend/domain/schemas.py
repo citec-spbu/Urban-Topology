@@ -44,5 +44,3 @@ class GraphBase(BaseModel):
     metrics_csv: str
     access_nodes_csv: Optional[str] = None
     access_edges_csv: Optional[str] = None
-    combined_nodes_csv: Optional[str] = None
-    combined_edges_csv: Optional[str] = None

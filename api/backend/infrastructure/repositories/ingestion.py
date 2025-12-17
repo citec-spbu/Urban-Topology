@@ -24,14 +24,6 @@ from infrastructure.osm.osm_handler import build_access_graph
 logger = logging.getLogger(__name__)
 
 
-def _normalize_node_type(node_type: Optional[str]) -> str:
-    """Return canonical lowercase node_type names for persistence."""
-    if not node_type:
-        return "intersection"
-    normalized = node_type.strip().lower()
-    return normalized if normalized else "intersection"
-
-
 class IngestionRepository:
     """Low-level data access helpers for importing OSM-derived city graphs."""
 
@@ -230,9 +222,6 @@ class IngestionRepository:
 
         nodes_payload, edges_payload = build_access_graph(osm_file_path=file_path)
 
-        for payload in nodes_payload or []:
-            payload["node_type"] = _normalize_node_type(payload.get("node_type"))
-
         def _trim(name: Optional[str]) -> Optional[str]:
             if not name:
                 return None
@@ -258,7 +247,7 @@ class IngestionRepository:
                             "id_city": city_id,
                             "source_type": node.get("source_type") or "node",
                             "source_id": node.get("source_id"),
-                            "node_type": _normalize_node_type(node.get("node_type")),
+                            "node_type": node.get("node_type"),
                             "longitude": node.get("longitude"),
                             "latitude": node.get("latitude"),
                             "name": _trim(node.get("name")),
