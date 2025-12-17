@@ -2,7 +2,8 @@
 
 import asyncio
 import logging
-from typing import List
+from typing import List, Dict, Tuple
+from math import radians, cos, sin, asin, sqrt
 
 import networkx as nx
 
@@ -132,9 +133,6 @@ async def graph_from_poly(city_id, polygon):
     res = repo_graph.point_props_via_temp(points_prop_ids)
     points_prop = list(map(record_obj_to_pprop, res))
 
-    oneway_ids = await repo_graph.oneway_ids(city_id=city_id)
-    metrics = await calc_metrics(points, edges, oneway_ids)
-
     access_nodes_raw = await repo_graph.access_nodes_in_polygon(
         city_id=city_id, polygon_wkt=polygon_wkt
     )
@@ -143,6 +141,17 @@ async def graph_from_poly(city_id, polygon):
     )
     access_nodes = list(map(access_node_obj_to_list, access_nodes_raw))
     access_edges = list(map(access_edge_obj_to_list, access_edges_raw))
+
+    points, edges, access_nodes, access_edges = merge_close_nodes(
+        points, edges, access_nodes, access_edges, threshold_meters=5.0
+    )
+
+    points, edges, access_nodes, access_edges = filter_largest_component(
+        points, edges, access_nodes, access_edges
+    )
+
+    oneway_ids = await repo_graph.oneway_ids(city_id=city_id)
+    metrics = await calc_metrics(points, edges, oneway_ids)
 
     return (
         points,
@@ -233,3 +242,223 @@ def get_color_from_blue_to_red(value: float, min_value: float, max_value: float)
     green = 0
     blue = int(255 * (1 - normalized_value))
     return f"rgb({red}, {green}, {blue})"
+
+
+def haversine_distance(lon1: float, lat1: float, lon2: float, lat2: float) -> float:
+    """
+    Calculate the great circle distance in meters between two points
+    on the earth (specified in decimal degrees).
+    """
+    # Convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+
+    # Haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    c = 2 * asin(sqrt(a))
+    r = 6371000  # Radius of earth in meters
+    return c * r
+
+
+def merge_close_nodes(
+    points: List[List],
+    edges: List[List],
+    access_nodes: List[List],
+    access_edges: List[List],
+    threshold_meters: float = 5.0,
+) -> Tuple[List[List], List[List], List[List], List[List]]:
+    """
+    Merge nodes that are within threshold_meters of each other.
+    Returns filtered points, edges, access_nodes, access_edges and node mapping.
+
+    points: [id, longitude, latitude]
+    edges: [id, id_way, source, target, name]
+    access_nodes: [id, node_type, longitude, latitude, source_type, source_id, name]
+    access_edges: [id, source, target, source_way_id, road_type, length_m, is_building_link, name]
+    """
+    all_nodes = {}
+    for point in points:
+        all_nodes[point[0]] = {
+            "lon": point[1],
+            "lat": point[2],
+            "type": "base",
+            "data": point,
+        }
+
+    for node in access_nodes:
+        all_nodes[node[0]] = {
+            "lon": node[2],
+            "lat": node[3],
+            "type": "access",
+            "data": node,
+        }
+
+    node_ids = list(all_nodes.keys())
+    merged_groups = []
+    processed = set()
+
+    for i, node_id in enumerate(node_ids):
+        if node_id in processed:
+            continue
+
+        node_info = all_nodes[node_id]
+        group = [node_id]
+        processed.add(node_id)
+
+        for j in range(i + 1, len(node_ids)):
+            other_id = node_ids[j]
+            if other_id in processed:
+                continue
+
+            other_info = all_nodes[other_id]
+            distance = haversine_distance(
+                node_info["lon"], node_info["lat"], other_info["lon"], other_info["lat"]
+            )
+
+            if distance <= threshold_meters:
+                group.append(other_id)
+                processed.add(other_id)
+
+        merged_groups.append(group)
+
+    node_mapping = {}
+    for group in merged_groups:
+        representative = group[0]
+        for node_id in group:
+            node_mapping[node_id] = representative
+
+    filtered_points = []
+    filtered_access_nodes = []
+    seen_representatives = set()
+
+    for node_id in node_mapping.values():
+        if node_id not in seen_representatives:
+            seen_representatives.add(node_id)
+            node_info = all_nodes[node_id]
+            if node_info["type"] == "base":
+                filtered_points.append(node_info["data"])
+            else:
+                filtered_access_nodes.append(node_info["data"])
+
+    filtered_edges = []
+    seen_edges = set()
+
+    for edge in edges:
+        edge_id, id_way, source, target, name = edge[:5]
+        new_source = node_mapping.get(source, source)
+        new_target = node_mapping.get(target, target)
+
+        if new_source == new_target:
+            continue
+
+        edge_key = (new_source, new_target)
+        if edge_key in seen_edges:
+            continue
+
+        seen_edges.add(edge_key)
+        filtered_edges.append([edge_id, id_way, new_source, new_target, name])
+
+    filtered_access_edges = []
+    seen_access_edges = set()
+
+    for edge in access_edges:
+        # [id, source, target, source_way_id, road_type, length_m, is_building_link, name]
+        edge_id = edge[0]
+        source = edge[1]
+        target = edge[2]
+        rest = edge[3:] if len(edge) > 3 else []
+
+        new_source = node_mapping.get(source, source)
+        new_target = node_mapping.get(target, target)
+
+        if new_source == new_target:
+            continue
+
+        edge_key = (new_source, new_target)
+        if edge_key in seen_access_edges:
+            continue
+
+        seen_access_edges.add(edge_key)
+        filtered_access_edges.append([edge_id, new_source, new_target] + rest)
+
+    logger.info(
+        "[MERGE] Merged nodes: %d -> %d (removed %d close nodes within %.1fm)",
+        len(all_nodes),
+        len(filtered_points) + len(filtered_access_nodes),
+        len(all_nodes) - (len(filtered_points) + len(filtered_access_nodes)),
+        threshold_meters,
+    )
+
+    return (
+        filtered_points,
+        filtered_edges,
+        filtered_access_nodes,
+        filtered_access_edges,
+    )
+
+
+def filter_largest_component(
+    points: List[List],
+    edges: List[List],
+    access_nodes: List[List],
+    access_edges: List[List],
+) -> Tuple[List[List], List[List], List[List], List[List]]:
+    """
+    Keep only the largest connected component of the graph.
+    Returns filtered points, edges, access_nodes, access_edges.
+    """
+    G = nx.Graph()
+
+    all_node_ids = set()
+    for point in points:
+        all_node_ids.add(point[0])
+        G.add_node(point[0])
+
+    for node in access_nodes:
+        all_node_ids.add(node[0])
+        G.add_node(node[0])
+
+    for edge in edges:
+        source, target = edge[2], edge[3]
+        if source in all_node_ids and target in all_node_ids:
+            G.add_edge(source, target)
+
+    for edge in access_edges:
+        source, target = edge[1], edge[2]
+        if source in all_node_ids and target in all_node_ids:
+            G.add_edge(source, target)
+
+    components = list(nx.connected_components(G))
+
+    if not components:
+        logger.warning("No connected components found in graph")
+        return [], [], [], []
+
+    components.sort(key=len, reverse=True)
+    largest_component = components[0]
+
+    component_sizes = [len(c) for c in components[:10]]
+    logger.info(
+        "[FILTER] Connected components analysis: found %d components", len(components)
+    )
+    logger.info("[FILTER] Component sizes (first 10): %s", component_sizes)
+    logger.info(
+        "[FILTER] Keeping largest component: %d nodes (removed %d nodes from smaller components)",
+        len(largest_component),
+        len(all_node_ids) - len(largest_component),
+    )
+
+    filtered_points = [p for p in points if p[0] in largest_component]
+    filtered_access_nodes = [n for n in access_nodes if n[0] in largest_component]
+
+    filtered_edges = [
+        e for e in edges if e[2] in largest_component and e[3] in largest_component
+    ]
+    filtered_access_edges = [
+        e
+        for e in access_edges
+        if e[1] in largest_component and e[2] in largest_component
+    ]
+
+    return filtered_points, filtered_edges, filtered_access_nodes, filtered_access_edges

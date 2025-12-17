@@ -35,13 +35,11 @@ def graph_components():
 @pytest.fixture()
 def graph_base():
     return GraphBase(
-        edges_csv="id,id_way,source,target,name\n1,10,1,2,Main",
-        points_csv="id,longitude,latitude\n1,30.0,60.0",
+        edges_csv="id,id_way,source,target,name,layer,source_way_id,road_type,length_m,is_building_link\n1,10,1,2,Main,base,,,,",
+        points_csv="id,longitude,latitude,layer,node_type,source_type,source_id,name\n1,30.0,60.0,base,,,,",
         ways_properties_csv="id,property,value\n10,name,Main",
         points_properties_csv="id,property,value\n1,kind,intersection",
         metrics_csv="id,degree,in_degree,out_degree,eigenvector,betweenness,radius,color\n1,1,1,0,0.1,0.2,0.3,#fff",
-        access_nodes_csv="id,node_type,longitude,latitude,source_type,source_id,name\na1,building,30.1,60.1,building,10,Дом",
-        access_edges_csv="id,source,target,source_way_id,road_type,length_m,is_building_link,name\n20,a1,1,,building_link,15.5,True,Подъезд",
     )
 
 

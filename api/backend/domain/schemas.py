@@ -42,5 +42,3 @@ class GraphBase(BaseModel):
     ways_properties_csv: str
     points_properties_csv: str
     metrics_csv: str
-    access_nodes_csv: Optional[str] = None
-    access_edges_csv: Optional[str] = None

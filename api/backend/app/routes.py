@@ -40,8 +40,6 @@ def build_router(logger) -> APIRouter:
                     "ways_properties_csv",
                     "points_properties_csv",
                     "metrics_csv",
-                    "access_nodes_csv",
-                    "access_edges_csv",
                 }
                 if (
                     isinstance(cached_data, dict)

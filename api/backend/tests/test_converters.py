@@ -8,8 +8,7 @@ import zipfile
 
 from application.converters import (
     graph_to_zip_archive,
-    merge_edges_csv,
-    merge_nodes_csv,
+    graph_to_scheme,
 )
 from domain.schemas import GraphBase
 
@@ -19,50 +18,65 @@ def _parse(csv_text: str) -> list[dict[str, str]]:
     return list(reader)
 
 
-def test_merge_nodes_csv_preserves_layers():
-    base_nodes = "id,longitude,latitude\n1,30.0,60.0"
-    access_nodes = (
-        "id,node_type,longitude,latitude,source_type,source_id,name\n"
-        "a1,building,30.1,60.1,building,10,Дом"
+def test_graph_to_scheme_merges_base_and_access_nodes():
+    base_points = [[1, 30.0, 60.0]]
+    base_edges = [[10, 100, 1, 2, "Road"]]
+    access_nodes = [["a1", "building", 30.1, 60.1, "building", "10", "Дом"]]
+    access_edges = [["20", "a1", "1", "", "building_link", "15.5", "True", "Подъезд"]]
+
+    result = graph_to_scheme(
+        base_points,
+        base_edges,
+        [],
+        [],
+        [],
+        access_nodes=access_nodes,
+        access_edges=access_edges,
     )
 
-    merged = merge_nodes_csv(base_nodes, access_nodes)
-    rows = _parse(merged)
+    nodes = _parse(result.points_csv)
+    assert len(nodes) == 2
+    assert {row["layer"] for row in nodes} == {"base", "access"}
 
-    assert {row["layer"] for row in rows} == {"base", "access"}
-    base_row = next(row for row in rows if row["layer"] == "base")
-    assert base_row["node_type"] == "graph"
-    access_row = next(row for row in rows if row["layer"] == "access")
-    assert access_row["node_type"] == "building"
+    base_node = next(row for row in nodes if row["layer"] == "base")
+    assert base_node["id"] == "1"
+
+    access_node = next(row for row in nodes if row["layer"] == "access")
+    assert access_node["node_type"] == "building"
+    assert access_node["name"] == "Дом"
 
 
-def test_merge_edges_csv_combines_metadata():
-    base_edges = "id,source,target,id_way,name\n10,1,2,55,Main"
-    access_edges = (
-        "id,source,target,source_way_id,road_type,length_m,is_building_link,name\n"
-        "20,a1,1,,building_link,15.5,True,Подъезд"
+def test_graph_to_scheme_merges_base_and_access_edges():
+    base_points = [[1, 30.0, 60.0]]
+    base_edges = [[10, 100, 1, 2, "Road"]]
+    access_edges = [["20", "a1", "1", "", "building_link", "15.5", "True", "Подъезд"]]
+
+    result = graph_to_scheme(
+        base_points,
+        base_edges,
+        [],
+        [],
+        [],
+        access_nodes=None,
+        access_edges=access_edges,
     )
 
-    merged = merge_edges_csv(base_edges, access_edges)
-    rows = _parse(merged)
+    edges = _parse(result.edges_csv)
+    assert len(edges) == 2
+    assert {row["layer"] for row in edges} == {"base", "access"}
 
-    assert len(rows) == 2
-    assert {row["layer"] for row in rows} == {"base", "access"}
-    access_row = next(row for row in rows if row["layer"] == "access")
-    assert access_row["road_type"] == "building_link"
-    base_row = next(row for row in rows if row["layer"] == "base")
-    assert base_row["is_building_link"] == "False"
+    access_edge = next(row for row in edges if row["layer"] == "access")
+    assert access_edge["road_type"] == "building_link"
+    assert access_edge["is_building_link"] == "True"
 
 
 def test_graph_to_zip_archive_writes_all_files():
     graph = GraphBase(
-        edges_csv="id,source,target\n1,1,2",
-        points_csv="id,longitude,latitude\n1,30.0,60.0",
+        edges_csv="id,id_way,source,target,name,layer,source_way_id,road_type,length_m,is_building_link\n1,100,1,2,Road,base,,,,",
+        points_csv="id,longitude,latitude,layer,node_type,source_type,source_id,name\n1,30.0,60.0,base,,,,",
         ways_properties_csv="id,property,value\n1,name,Main",
         points_properties_csv="id,property,value\n1,type,intersection",
         metrics_csv="id,degree,in_degree,out_degree,eigenvector,betweenness,radius,color\n1,1,1,0,0.1,0.2,0.3,#fff",
-        access_nodes_csv="id,node_type,longitude,latitude,source_type,source_id,name\na1,building,30.1,60.1,building,10,Дом",
-        access_edges_csv="id,source,target,source_way_id,road_type,length_m,is_building_link,name\n20,a1,1,,building_link,15.5,True,Подъезд",
     )
 
     archive = graph_to_zip_archive(graph)
@@ -78,4 +92,4 @@ def test_graph_to_zip_archive_writes_all_files():
         nodes = zf.read("nodes.csv").decode("utf-8")
         assert "layer" in nodes
         edges = zf.read("edges.csv").decode("utf-8")
-        assert "building_link" in edges
+        assert "layer" in edges

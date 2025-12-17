@@ -114,7 +114,10 @@ class _GraphRepoComplete:
 
     async def points_in_polygon(self, *args, **kwargs):
         self._point_calls.append((args, kwargs))
-        return [SimpleNamespace(id=1, longitude=30.0, latitude=60.0)]
+        return [
+            SimpleNamespace(id=1, longitude=30.0, latitude=60.0),
+            SimpleNamespace(id=2, longitude=30.001, latitude=60.001),
+        ]
 
     async def edges_in_polygon(self, *args, **kwargs):
         return [
@@ -233,11 +236,13 @@ async def test_graph_from_poly_returns_full_payload(monkeypatch):
         result
     )
 
-    assert points == [[1, 30.0, 60.0]]
+    assert len(points) == 2
+    assert points[0] == [1, 30.0, 60.0]
     assert edges[0][:4] == [5, 7, 1, 2]
-    assert points_prop == [[1, "kind", "cross"]]
+    assert points_prop[0][0] in {1, 2}
     assert ways_prop == [[7, "name", "Main"]]
-    assert metrics[0][0] == 1
+    assert len(metrics) == 2
+    assert metrics[0][0] in {1, 2}
     assert access_nodes[0][0] == "a1"
     assert access_edges[0][0] == "e1"
 
