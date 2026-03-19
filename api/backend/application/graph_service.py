@@ -151,7 +151,7 @@ async def graph_from_poly(city_id, polygon):
     )
 
     oneway_ids = await repo_graph.oneway_ids(city_id=city_id)
-    metrics = await calc_metrics(points, edges, oneway_ids)
+    metrics = await calc_metrics(points, edges, access_nodes, access_edges, oneway_ids)
 
     return (
         points,
@@ -164,21 +164,30 @@ async def graph_from_poly(city_id, polygon):
     )
 
 
-async def calc_metrics(points, edges, oneway_ids):
+async def calc_metrics(points, edges, access_nodes, access_edges, oneway_ids):
     # Empty graph means no metrics to compute
-    if not points:
+    if not points and not access_nodes:
         return []
 
     points_list = [point[0] for point in points]
-    edges_list = [(edge[2], edge[3]) for edge in edges]
-    reversed_edges_list = [
-        (edge[3], edge[2]) for edge in edges if edge[1] not in oneway_ids
-    ]
+    access_points_list = [node[0] for node in access_nodes]
+
+    oneway_ids_set = set(oneway_ids)
+    directed_edges = {(edge[2], edge[3]) for edge in edges}
+    directed_edges.update(
+        (edge[3], edge[2]) for edge in edges if edge[1] not in oneway_ids_set
+    )
+
+    # Access layer edges are modeled as bidirectional connectors.
+    for edge in access_edges:
+        source, target = edge[1], edge[2]
+        directed_edges.add((source, target))
+        directed_edges.add((target, source))
 
     G = nx.DiGraph()
     G.add_nodes_from(points_list)
-    G.add_edges_from(edges_list)
-    G.add_edges_from(reversed_edges_list)
+    G.add_nodes_from(access_points_list)
+    G.add_edges_from(directed_edges)
 
     degree_dict = nx.degree(G)
     in_degree_dict = nx.in_degree_centrality(G)
@@ -206,7 +215,7 @@ async def calc_metrics(points, edges, oneway_ids):
     adjusted_max_betweenness = 1 if max_betweenness == 0 else max_betweenness
 
     metrics_list = []
-    for node_id in in_degree_dict:
+    for node_id in G.nodes:
         node_betweenness = betweenness_dict[node_id]
         normalized_betweenness = node_betweenness / adjusted_max_betweenness
         radius = get_radius_based_on_metric(normalized_betweenness)

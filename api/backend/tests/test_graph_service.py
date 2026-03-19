@@ -29,7 +29,7 @@ def test_get_radius_based_on_metric_scales_value():
 
 
 async def test_calc_metrics_returns_empty_when_no_points():
-    metrics = await graph_service.calc_metrics([], [], set())
+    metrics = await graph_service.calc_metrics([], [], [], [], set())
     assert metrics == []
 
 
@@ -40,7 +40,7 @@ async def test_calc_metrics_builds_metrics_for_simple_graph():
     ]
     oneway_ids = set()
 
-    metrics = await graph_service.calc_metrics(points, edges, oneway_ids)
+    metrics = await graph_service.calc_metrics(points, edges, [], [], oneway_ids)
 
     assert len(metrics) == 2
     ids = {row[0] for row in metrics}
@@ -48,6 +48,20 @@ async def test_calc_metrics_builds_metrics_for_simple_graph():
     # Ensure betweenness normalization and color computation happened
     colors = {row[-1] for row in metrics}
     assert all(color.startswith("rgb(") for color in colors)
+
+
+async def test_calc_metrics_includes_access_layer_nodes_and_edges():
+    points = [[1, 30.0, 60.0], [2, 31.0, 61.0]]
+    edges = [[10, 100, 1, 2, "Road"]]
+    access_nodes = [["a1", "building", 31.1, 61.1, "building", 10, "Dom"]]
+    access_edges = [["e1", "a1", 1, 7, "service", 5.5, True, "link"]]
+
+    metrics = await graph_service.calc_metrics(
+        points, edges, access_nodes, access_edges, oneway_ids=set()
+    )
+
+    ids = {row[0] for row in metrics}
+    assert ids == {1, 2, "a1"}
 
 
 class _CityRepoMissing:
@@ -223,9 +237,10 @@ async def test_graph_from_poly_returns_full_payload(monkeypatch):
     monkeypatch.setattr(graph_service, "CityRepository", lambda: _CityRepo())
     monkeypatch.setattr(graph_service, "GraphRepository", lambda: _GraphRepoComplete())
 
-    async def _fake_metrics(points, edges, oneway_ids):
+    async def _fake_metrics(points, edges, access_nodes, access_edges, oneway_ids):
         return [
-            [point[0], 1, 0.5, 0.5, 0.1, 0.2, 1.5, "rgb(0, 0, 0)"] for point in points
+            [node_id, 1, 0.5, 0.5, 0.1, 0.2, 1.5, "rgb(0, 0, 0)"]
+            for node_id in [*{p[0] for p in points}, *{n[0] for n in access_nodes}]
         ]
 
     monkeypatch.setattr(graph_service, "calc_metrics", _fake_metrics)
@@ -241,8 +256,8 @@ async def test_graph_from_poly_returns_full_payload(monkeypatch):
     assert edges[0][:4] == [5, 7, 1, 2]
     assert points_prop[0][0] in {1, 2}
     assert ways_prop == [[7, "name", "Main"]]
-    assert len(metrics) == 2
-    assert metrics[0][0] in {1, 2}
+    assert len(metrics) == 3
+    assert {row[0] for row in metrics} == {1, 2, "a1"}
     assert access_nodes[0][0] == "a1"
     assert access_edges[0][0] == "e1"
 

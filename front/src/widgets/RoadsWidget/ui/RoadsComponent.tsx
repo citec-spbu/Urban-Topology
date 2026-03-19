@@ -146,6 +146,16 @@ const parseBool = (value?: string): boolean => {
     return normalized === 'true' || normalized === '1' || normalized === 'yes'
 }
 
+const hasMetricData = (node: Node): boolean => {
+    return [
+        node.degree_value,
+        node.in_degree_value,
+        node.out_degree_value,
+        node.eigenvector_value,
+        node.betweenness_value,
+    ].some((value) => value !== undefined && value !== '')
+}
+
 const computeBounds = (nodes: Record<string, Node>): LatLngBoundsExpression | null => {
     const entries = Object.values(nodes)
     if (!entries.length) return null
@@ -446,6 +456,15 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                                 <b>Здание</b><br/>
                                 Источник: {node.source_type} {node.source_id}<br/>
                                 {node.name ? <>Название: {node.name}<br/></> : null}
+                                {hasMetricData(node) ? (
+                                    <>
+                                        Degree: {node.degree_value}<br/>
+                                        In-Degree: {node.in_degree_value}<br/>
+                                        Out-Degree: {node.out_degree_value}<br/>
+                                        Eigenvector: {node.eigenvector_value}<br/>
+                                        Betweenness: {node.betweenness_value}<br/>
+                                    </>
+                                ) : null}
                             </div>
                         </Popup>
                     </CircleMarker>
@@ -454,10 +473,10 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                     <CircleMarker
                         key={`pedestrian-node-${node.source_id || Math.random()}`}
                         center={getNodeLatLng(node)}
-                        radius={4}
+                        radius={Number(node.radius_value) || 4}
                         pathOptions={{
-                            color: '#f97316',
-                            fillColor: '#f97316',
+                            color: node.color_value || '#f97316',
+                            fillColor: node.color_value || '#f97316',
                             fillOpacity: 0.85,
                         }}
                     >
@@ -466,6 +485,15 @@ export const RoadsComponent: React.FC<RoadsComponentProps> = ({graphData, onDown
                                 <b>Точка доступа</b><br/>
                                 Источник: {node.source_type} {node.source_id}<br/>
                                 {node.name ? <>Название: {node.name}<br/></> : null}
+                                {hasMetricData(node) ? (
+                                    <>
+                                        Degree: {node.degree_value}<br/>
+                                        In-Degree: {node.in_degree_value}<br/>
+                                        Out-Degree: {node.out_degree_value}<br/>
+                                        Eigenvector: {node.eigenvector_value}<br/>
+                                        Betweenness: {node.betweenness_value}<br/>
+                                    </>
+                                ) : null}
                             </div>
                         </Popup>
                     </CircleMarker>
